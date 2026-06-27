@@ -1,0 +1,1 @@
+ALTER TABLE "ScreenVersion" ADD COLUMN "diff" TEXT NOT NULL DEFAULT '';

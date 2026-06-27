@@ -1,0 +1,148 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id                 String        @id @default(cuid())
+  name               String
+  description        String        @default("")
+  targetUsers        String        @default("")
+  appGoal            String        @default("")
+  platform           String        @default("iOS и Android")
+  styleDirection     String        @default("")
+  designRequirements String        @default("")
+  architectureNotes  String        @default("")
+  constraints        String        @default("")
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  rules              ProjectRule[]
+  screens            Screen[]
+  designDecisions    DesignDecision[]
+  screenSummaries    ScreenSummary[]
+  aiPromptLogs       AiPromptLog[]
+}
+
+model ProjectRule {
+  id        String   @id @default(cuid())
+  projectId String
+  category  String
+  name      String
+  value     String
+  source    String   @default("user")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model Screen {
+  id                String          @id @default(cuid())
+  projectId         String
+  approvedVersionId String?         @unique
+  name              String
+  purpose           String          @default("")
+  status            String          @default("draft")
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions          ScreenVersion[] @relation("ScreenVersions")
+  approvedVersion   ScreenVersion?  @relation("ApprovedScreenVersion", fields: [approvedVersionId], references: [id], onDelete: SetNull)
+  designDecisions   DesignDecision[]
+  summaries         ScreenSummary[]
+  aiPromptLogs      AiPromptLog[]
+
+  @@index([projectId])
+}
+
+model ScreenVersion {
+  id            String   @id @default(cuid())
+  screenId      String
+  versionNumber Int
+  userRequest   String   @default("")
+  designSpec    String   @default("")
+  imagePrompt   String   @default("")
+  changeSummary String   @default("")
+  diff          String   @default("")
+  newRulesJson  String   @default("[]")
+  createdAt     DateTime @default(now())
+  screen        Screen   @relation("ScreenVersions", fields: [screenId], references: [id], onDelete: Cascade)
+  approvedForScreen Screen? @relation("ApprovedScreenVersion")
+  designDecisions DesignDecision[]
+  summaries       ScreenSummary[]
+  aiPromptLogs    AiPromptLog[]
+
+  @@unique([screenId, versionNumber])
+  @@index([screenId])
+}
+
+model DesignDecision {
+  id              String   @id @default(cuid())
+  projectId       String
+  screenId        String?
+  screenVersionId String?
+  type            String
+  target          String
+  oldValue        String?
+  newValue        String?
+  reason          String?
+  source          String   @default("ai")
+  status          String   @default("proposed")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  screen          Screen?  @relation(fields: [screenId], references: [id], onDelete: SetNull)
+  screenVersion   ScreenVersion? @relation(fields: [screenVersionId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@index([screenId])
+  @@index([screenVersionId])
+}
+
+model ScreenSummary {
+  id                String   @id @default(cuid())
+  projectId         String
+  screenId          String
+  screenVersionId   String   @unique
+  summary           String
+  mainPurpose       String
+  primaryUserAction String?
+  usedPatterns      String?
+  usedRules         String?
+  visualNotes       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  screen            Screen   @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  screenVersion     ScreenVersion @relation(fields: [screenVersionId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([screenId])
+}
+
+model AiPromptLog {
+  id              String   @id @default(cuid())
+  projectId       String
+  screenId        String?
+  screenVersionId String?
+  action          String
+  model           String
+  requestPreview  String
+  fullPrompt      String
+  rawResponse     String?
+  parsedResponse  String?
+  error           String?
+  createdAt       DateTime @default(now())
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  screen          Screen?  @relation(fields: [screenId], references: [id], onDelete: SetNull)
+  screenVersion   ScreenVersion? @relation(fields: [screenVersionId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([screenId])
+  @@index([screenVersionId])
+}
