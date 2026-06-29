@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -18,6 +18,7 @@ model Project {
   designRequirements String        @default("")
   architectureNotes  String        @default("")
   constraints        String        @default("")
+  designSystemSource String        @default("current_library")
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
   rules              ProjectRule[]
@@ -25,6 +26,13 @@ model Project {
   designDecisions    DesignDecision[]
   screenSummaries    ScreenSummary[]
   aiPromptLogs       AiPromptLog[]
+  designComponents   DesignComponent[]
+  designTokens       DesignToken[]
+  designAssets       DesignAsset[]
+  designPatterns     DesignPattern[]
+  designImports      DesignImport[]
+  similarityReports  ComponentSimilarityReport[]
+  styleReports       StyleSimilarityReport[]
 }
 
 model ProjectRule {
@@ -70,15 +78,155 @@ model ScreenVersion {
   changeSummary String   @default("")
   diff          String   @default("")
   newRulesJson  String   @default("[]")
+  layoutJson    String?
+  htmlLayout    String?
+  flutterWidgetTree String?
   createdAt     DateTime @default(now())
   screen        Screen   @relation("ScreenVersions", fields: [screenId], references: [id], onDelete: Cascade)
   approvedForScreen Screen? @relation("ApprovedScreenVersion")
   designDecisions DesignDecision[]
   summaries       ScreenSummary[]
   aiPromptLogs    AiPromptLog[]
+  styleSimilarityReport StyleSimilarityReport?
 
   @@unique([screenId, versionNumber])
   @@index([screenId])
+}
+
+model DesignComponent {
+  id                    String   @id @default(cuid())
+  projectId             String
+  name                  String
+  description           String   @default("")
+  category              String   @default("Misc")
+  screenshot            String?
+  preview               String?
+  layoutJson            String?
+  htmlLayout            String?
+  flutterWidgetTree     String?
+  dimensions            String?
+  radius                String?
+  colors                String?
+  typography            String?
+  spacing               String?
+  states                String?
+  variants              String?
+  source                String   @default("manual")
+  usageCount            Int      @default(0)
+  approved              Boolean  @default(false)
+  status                String   @default("draft")
+  createdBy             String   @default("user")
+  basedOnComponents     String?
+  creationReason        String?
+  differences           String?
+  imagePrompt           String?
+  designSpec            String?
+  usageGuidelines       String?
+  accessibilityNotes    String?
+  usedInScreens         String?
+  sourceScreenId        String?
+  sourceScreenVersionId String?
+  lastUsedAt            DateTime?
+  screensUsedIn         String?
+  projectsUsedIn        String?
+  similarityHistory     String?
+  editHistory           String?
+  approveHistory        String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  project               Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  similarityReports     ComponentSimilarityReport[]
+
+  @@index([projectId, status])
+  @@index([projectId, category])
+  @@index([sourceScreenVersionId])
+}
+
+model DesignToken {
+  id        String   @id @default(cuid())
+  projectId String
+  group     String
+  name      String
+  value     String
+  description String @default("")
+  source    String   @default("manual")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, group, name])
+  @@index([projectId, group])
+}
+
+model DesignAsset {
+  id        String   @id @default(cuid())
+  projectId String
+  name      String
+  type      String
+  path      String?
+  preview   String?
+  metadata  String?
+  source    String   @default("import")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@index([projectId, type])
+}
+
+model DesignPattern {
+  id          String   @id @default(cuid())
+  projectId   String
+  name        String
+  category    String
+  description String   @default("")
+  layoutJson  String?
+  componentIds String?
+  usageCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@index([projectId, category])
+}
+
+model DesignImport {
+  id           String   @id @default(cuid())
+  projectId    String
+  type         String
+  name         String
+  sourcePath   String?
+  status       String   @default("pending")
+  analysisJson String?
+  error        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@index([projectId, status])
+}
+
+model ComponentSimilarityReport {
+  id                 String   @id @default(cuid())
+  projectId          String
+  componentId        String?
+  candidateName      String
+  score              Float
+  recommendation     String
+  reasonsJson        String?
+  createdAt          DateTime @default(now())
+  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  component          DesignComponent? @relation(fields: [componentId], references: [id], onDelete: SetNull)
+  @@index([projectId, score])
+}
+
+model StyleSimilarityReport {
+  id              String   @id @default(cuid())
+  projectId       String
+  screenVersionId String   @unique
+  score           Float
+  reasonsJson     String?
+  createdAt       DateTime @default(now())
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  screenVersion   ScreenVersion @relation(fields: [screenVersionId], references: [id], onDelete: Cascade)
+  @@index([projectId, score])
 }
 
 model DesignDecision {

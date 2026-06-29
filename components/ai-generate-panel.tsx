@@ -8,6 +8,7 @@ import {
   type GenerateScreenResult,
 } from "@/app/projects/[id]/screens/[screenId]/ai-actions";
 import { AiContextViewer } from "@/components/ai-context-viewer";
+import { ModeOnly } from "@/components/interface-mode";
 
 type SuccessResult = Extract<GenerateScreenResult, { ok: true }>;
 
@@ -69,8 +70,8 @@ export function AiGeneratePanel({
               <Sparkles size={19} />
             </span>
             <div>
-              <h2 className="text-xl font-black tracking-[-0.02em]">AI Generate</h2>
-              <p className="mt-0.5 text-sm text-muted">Создаёт Design Spec и готовый Image Prompt.</p>
+              <h2 className="text-xl font-black tracking-[-0.02em]">Генерация AI</h2>
+              <p className="mt-0.5 text-sm text-muted">Создаёт схему экрана и готовый промпт для изображения.</p>
             </div>
           </div>
 
@@ -92,9 +93,9 @@ export function AiGeneratePanel({
                 className="inline-flex h-11 items-center gap-2 rounded-xl bg-violet px-5 text-sm font-bold text-white shadow-soft disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isGenerating ? <Loader2 size={17} className="animate-spin" /> : <Sparkles size={17} />}
-                {isGenerating ? "Генерируем…" : "Generate"}
+                {isGenerating ? "Генерируем…" : "Сгенерировать"}
               </button>
-              <AiContextViewer projectId={projectId} screenId={screenId} />
+              <ModeOnly mode="expert"><AiContextViewer projectId={projectId} screenId={screenId} /></ModeOnly>
               <span className="text-xs leading-5 text-muted">
                 Результат автоматически сохранится как новая версия.
               </span>
@@ -107,22 +108,22 @@ export function AiGeneratePanel({
           ) : null}
         </div>
 
-        <aside className="rounded-2xl bg-ink p-5 text-white">
-          <p className="text-xs font-black uppercase tracking-[0.12em] text-white/45">Context included</p>
+        <ModeOnly mode="expert"><aside className="rounded-2xl bg-ink p-5 text-white">
+          <p className="text-xs font-black uppercase tracking-[0.12em] text-white/45">Контекст генерации</p>
           <ul className="mt-4 space-y-3 text-sm text-white/75">
-            <ContextItem>Project Memory</ContextItem>
-            <ContextItem>Project Rules</ContextItem>
-            <ContextItem>Approved screens</ContextItem>
-            <ContextItem>Approved screen versions</ContextItem>
+            <ContextItem>Память проекта</ContextItem>
+            <ContextItem>Правила проекта</ContextItem>
+            <ContextItem>Утверждённые экраны</ContextItem>
+            <ContextItem>Утверждённые версии экранов</ContextItem>
           </ul>
-        </aside>
+        </aside></ModeOnly>
       </div>
 
       {result ? (
         <div className="border-t border-violet/15 bg-white p-5 sm:p-7">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.12em] text-violet">Version {result.versionNumber}</p>
+              <p className="text-xs font-black uppercase tracking-[0.12em] text-violet">Версия {result.versionNumber}</p>
               <h3 className="mt-1 text-xl font-black">{result.changeSummary}</h3>
             </div>
             <button
@@ -131,13 +132,13 @@ export function AiGeneratePanel({
               className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-bold text-ink hover:border-violet/30 hover:text-violet"
             >
               {copied ? <Check size={16} /> : <Copy size={16} />}
-              {copied ? "Скопировано" : "Copy Prompt"}
+              {copied ? "Скопировано" : "Копировать промпт"}
             </button>
           </div>
 
           <div className="mt-6 grid gap-5 lg:grid-cols-2">
-            <ResultBlock title="Design Spec" value={result.designSpec} />
-            <ResultBlock title="Image Prompt" value={result.imagePrompt} mono />
+            <ModeOnly mode="expert"><ResultBlock title="Спецификация дизайна" value={result.designSpec} /></ModeOnly>
+            <ResultBlock title="Промпт для изображения" value={result.imagePrompt} mono />
           </div>
 
           {result.newRules.length ? (

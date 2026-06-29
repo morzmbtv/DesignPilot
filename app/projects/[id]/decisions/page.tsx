@@ -28,7 +28,7 @@ export default async function DecisionsPage({ params }: { params: { id: string }
       <Link href={`/projects/${project.id}/memory`} className="inline-flex items-center gap-2 text-sm font-bold text-muted hover:text-violet"><ArrowLeft size={17} /> {project.name}</Link>
       <div className="mt-6 flex items-start gap-4">
         <span className="flex size-12 items-center justify-center rounded-2xl bg-violet/10 text-violet"><Scale size={23} /></span>
-        <div><h1 className="text-4xl font-black tracking-[-0.045em]">Design Decisions</h1><p className="mt-2 text-sm text-muted">История решений, которые формируют визуальный язык проекта.</p></div>
+        <div><h1 className="text-4xl font-black tracking-[-0.045em]">Дизайн-решения</h1><p className="mt-2 text-sm text-muted">История решений, которые формируют визуальный язык проекта.</p></div>
       </div>
       <DesignDecisionsPanel projectId={project.id} decisions={decisions} />
     </AppShell>

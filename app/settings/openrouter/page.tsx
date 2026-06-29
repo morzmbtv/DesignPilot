@@ -21,7 +21,7 @@ export default function OpenRouterSettingsPage() {
         <div>
           <h1 className="text-4xl font-black tracking-[-0.04em]">OpenRouter</h1>
           <p className="mt-2 max-w-2xl text-[15px] leading-6 text-muted">
-            Проверьте серверное подключение перед генерацией Design Spec и промптов.
+            Проверьте подключение модели перед генерацией спецификаций и промптов.
           </p>
         </div>
       </div>

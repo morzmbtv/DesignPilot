@@ -25,7 +25,7 @@ export function AiContextViewer({ projectId, screenId }: { projectId: string; sc
   return (
     <>
       <button type="button" onClick={showPreview} className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-bold text-ink hover:border-violet/30 hover:text-violet">
-        <Eye size={16} /> Preview Context
+        <Eye size={16} /> Просмотреть контекст
       </button>
       {open ? (
         <div className="fixed inset-0 z-50 flex justify-end bg-ink/35" role="dialog" aria-modal="true" aria-label="AI Context Viewer">
@@ -33,7 +33,7 @@ export function AiContextViewer({ projectId, screenId }: { projectId: string; sc
           <aside className="relative h-full w-full max-w-2xl overflow-y-auto bg-white p-5 shadow-2xl sm:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-bold text-violet">AI Context Viewer</p>
+                <p className="text-sm font-bold text-violet">Просмотр контекста AI</p>
                 <h2 className="mt-2 text-2xl font-black">Контекст следующего вызова</h2>
               </div>
               <button onClick={() => setOpen(false)} className="flex size-10 items-center justify-center rounded-xl border border-line"><X size={18} /></button>
@@ -43,16 +43,16 @@ export function AiContextViewer({ projectId, screenId }: { projectId: string; sc
             {preview ? (
               <>
                 <div className="mt-8 grid gap-3 sm:grid-cols-2">
-                  <ContextCard label="Project Memory" value={preview.projectMemory} />
-                  <ContextCard label="Project Rules" value={`${preview.projectRulesCount} правил`} />
-                  <ContextCard label="Approved screens" value={preview.approvedScreens.join(", ") || "Нет"} />
-                  <ContextCard label="Related screens" value={preview.relatedScreens.join(", ") || "Нет"} />
-                  <ContextCard label="Approved summaries" value={`${preview.approvedSummaries.length} summary`} />
-                  <ContextCard label="Selected model" value={preview.model} />
-                  <ContextCard label="Constraints" value={preview.constraints || "Не заданы"} wide />
+                  <ContextCard label="Память проекта" value={preview.projectMemory} />
+                  <ContextCard label="Правила проекта" value={`${preview.projectRulesCount} правил`} />
+                  <ContextCard label="Утверждённые экраны" value={preview.approvedScreens.join(", ") || "Нет"} />
+                  <ContextCard label="Связанные экраны" value={preview.relatedScreens.join(", ") || "Нет"} />
+                  <ContextCard label="Сводки экранов" value={`${preview.approvedSummaries.length}`} />
+                  <ContextCard label="Выбранная модель" value={preview.model} />
+                  <ContextCard label="Ограничения" value={preview.constraints || "Не заданы"} wide />
                 </div>
                 <details className="mt-6 rounded-2xl border border-line bg-[#fafaff] p-5" open>
-                  <summary className="flex cursor-pointer list-none items-center gap-2 font-black"><Braces size={17} className="text-violet" /> Raw context <ChevronRight size={15} /></summary>
+                  <summary className="flex cursor-pointer list-none items-center gap-2 font-black"><Braces size={17} className="text-violet" /> Исходный контекст <ChevronRight size={15} /></summary>
                   <pre className="mt-4 max-h-[48vh] overflow-auto whitespace-pre-wrap text-xs leading-5 text-ink">{preview.rawContext}</pre>
                 </details>
               </>

@@ -28,6 +28,7 @@ export function VersionApproval({
   const [savingRule, setSavingRule] = useState<string | null>(null);
   const [savedRules, setSavedRules] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [promotionMessage, setPromotionMessage] = useState("");
 
   useEffect(() => {
     setApproved(isApproved);
@@ -37,6 +38,7 @@ export function VersionApproval({
   async function approve() {
     setIsApproving(true);
     setError("");
+    setPromotionMessage("");
     try {
       const response = await approveScreenVersion(projectId, screenId, versionId);
       if (!response.ok) {
@@ -45,6 +47,9 @@ export function VersionApproval({
       }
       setApproved(true);
       setRules(response.newRules);
+      setPromotionMessage(response.promotedComponents
+        ? `Компоненты синхронизированы с библиотекой: ${response.promotedComponents}.`
+        : "Библиотека компонентов синхронизирована.");
       router.refresh();
     } catch {
       setError("Не удалось утвердить версию.");
@@ -83,12 +88,12 @@ export function VersionApproval({
         }`}
       >
         {isApproving ? <Loader2 size={16} className="animate-spin" /> : approved ? <CheckCircle2 size={16} /> : <Check size={16} />}
-        {approved ? `Approved version ${versionNumber}` : "Approve version"}
+        {approved ? `Утверждена версия ${versionNumber}` : "Утвердить версию"}
       </button>
 
       {approved && rules.length ? (
         <div className="mt-4 rounded-xl bg-violet/[0.035] p-4">
-          <p className="text-sm font-black">Сохранить новые правила в Project Memory?</p>
+          <p className="text-sm font-black">Сохранить новые правила в памяти проекта?</p>
           <div className="mt-3 space-y-2">
             {rules.map((rule, index) => {
               const key = `${rule.category}-${rule.name}-${index}`;
@@ -113,6 +118,7 @@ export function VersionApproval({
           </div>
         </div>
       ) : null}
+      {promotionMessage ? <p className="mt-3 text-sm font-bold text-emerald-700">{promotionMessage}</p> : null}
 
       {error ? (
         <p role="alert" className="mt-3 flex items-center gap-2 text-sm font-bold text-red-600">

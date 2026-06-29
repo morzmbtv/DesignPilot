@@ -99,7 +99,7 @@ export function ProjectMemoryEditor({
     setRuleError("");
     const impact = await analyzeProjectRuleImpact(projectId, editingRule);
     if (impact.count && !window.confirm(
-      `Правило потенциально затронет ${impact.count} approved screens:\n${impact.affectedScreens.map((screen) => `• ${screen.name}`).join("\n")}\n\nСохранить изменение?`,
+      `Правило потенциально затронет утверждённые экраны: ${impact.count}.\n${impact.affectedScreens.map((screen) => `• ${screen.name}`).join("\n")}\n\nСохранить изменение?`,
     )) return;
     setBusyRule(ruleId);
     try {
@@ -217,7 +217,7 @@ export function ProjectMemoryEditor({
               className="inline-flex h-11 items-center gap-2 rounded-xl bg-violet px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saveState === "saving" ? <Loader2 size={17} className="animate-spin" /> : <Save size={17} />}
-              Сохранить Project Memory
+              Сохранить память проекта
             </button>
           </div>
         </form>
@@ -225,10 +225,10 @@ export function ProjectMemoryEditor({
         <section id="project-rules" className="scroll-mt-8 rounded-[22px] border border-line bg-white p-5 sm:p-7">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-violet">04 · Rules</p>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-violet">04 · Правила</p>
               <h2 className="mt-2 text-2xl font-black tracking-[-0.03em]">Правила проекта</h2>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">
-                Явные инструкции, которые используются при подготовке Design Spec и промптов.
+                Инструкции, которые соблюдаются при подготовке схем и промптов.
               </p>
             </div>
             <span className="text-sm font-bold text-muted">{rules.length} правил</span>
@@ -237,7 +237,7 @@ export function ProjectMemoryEditor({
           <div className="mt-6 overflow-x-auto">
             <div className="min-w-[650px]">
               <div className="grid grid-cols-[110px_150px_1fr_90px_72px] gap-3 border-b border-line px-3 pb-3 text-[11px] font-black uppercase tracking-[0.1em] text-muted">
-                <span>Category</span><span>Name</span><span>Value</span><span>Source</span><span />
+                <span>Категория</span><span>Название</span><span>Значение</span><span>Источник</span><span />
               </div>
               {rules.length ? rules.map((rule) => (
                 editingId === rule.id ? (
@@ -268,7 +268,7 @@ export function ProjectMemoryEditor({
                   </div>
                 )
               )) : (
-                <div className="py-10 text-center text-sm text-muted">Добавьте первое правило проекта.</div>
+                <div className="py-10 text-center text-sm text-muted">Правила появятся после утверждения экранов и правок.</div>
               )}
             </div>
           </div>
@@ -289,7 +289,7 @@ export function ProjectMemoryEditor({
 
       <aside className="order-first xl:order-none">
         <div className="sticky top-6 rounded-[22px] bg-ink p-5 text-white">
-          <p className="text-xs font-black uppercase tracking-[0.12em] text-white/50">Memory status</p>
+          <p className="text-xs font-black uppercase tracking-[0.12em] text-white/50">Готовность памяти</p>
           <p className="mt-4 text-lg font-black">Единый источник контекста</p>
           <p className="mt-2 text-sm leading-6 text-white/65">
             Эти данные будут использоваться для генерации спецификаций каждого экрана.

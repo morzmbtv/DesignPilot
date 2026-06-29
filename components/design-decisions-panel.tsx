@@ -72,11 +72,11 @@ export function DesignDecisionsPanel({ projectId, decisions }: { projectId: stri
     <>
       <div className="mt-8 flex flex-wrap gap-3 rounded-2xl border border-line bg-white p-4">
         <Filter size={18} className="mt-3 text-violet" />
-        <FilterSelect label="Status" value={status} onChange={setStatus} options={["all", "proposed", "approved", "rejected"]} />
-        <FilterSelect label="Type" value={type} onChange={setType} options={["all", ...types]} />
-        <label className="text-xs font-bold text-muted">Screen
+        <FilterSelect label="Статус" value={status} onChange={setStatus} options={["all", "proposed", "approved", "rejected"]} />
+        <FilterSelect label="Тип" value={type} onChange={setType} options={["all", ...types]} />
+        <label className="text-xs font-bold text-muted">Экран
           <select value={screen} onChange={(event) => setScreen(event.target.value)} className="mt-1 block h-10 rounded-xl border border-line bg-white px-3 text-sm text-ink">
-            <option value="all">all</option>
+            <option value="all">Все</option>
             {screens.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
           </select>
         </label>
@@ -96,36 +96,36 @@ export function DesignDecisionsPanel({ projectId, decisions }: { projectId: stri
                   </div>
                   <p className="mt-2 text-sm text-muted">{decision.oldValue || "—"} <span className="px-2 text-violet">→</span> <strong className="text-ink">{decision.newValue || "—"}</strong></p>
                   {decision.reason ? <p className="mt-3 max-w-3xl text-sm leading-6 text-muted">{decision.reason}</p> : null}
-                  <p className="mt-3 text-xs text-muted">{decision.screen?.name || "Global"} · {decision.source} · {new Date(decision.createdAt).toLocaleString("ru-RU")}</p>
+                  <p className="mt-3 text-xs text-muted">{decision.screen?.name || "Глобальное"} · {decision.source} · {new Date(decision.createdAt).toLocaleString("ru-RU")}</p>
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
                 {decision.status === "proposed" ? (
                   <>
-                    <ActionButton onClick={() => changeStatus(decision.id, "approved")} disabled={busy === decision.id}><Check size={14} /> Approve</ActionButton>
-                    <ActionButton onClick={() => changeStatus(decision.id, "rejected")} disabled={busy === decision.id} danger><X size={14} /> Reject</ActionButton>
+                    <ActionButton onClick={() => changeStatus(decision.id, "approved")} disabled={busy === decision.id}><Check size={14} /> Утвердить</ActionButton>
+                    <ActionButton onClick={() => changeStatus(decision.id, "rejected")} disabled={busy === decision.id} danger><X size={14} /> Отклонить</ActionButton>
                   </>
                 ) : null}
-                <ActionButton onClick={() => openPromotion(decision)} disabled={busy === decision.id}><ShieldCheck size={14} /> Promote to Project Rule</ActionButton>
+                <ActionButton onClick={() => openPromotion(decision)} disabled={busy === decision.id}><ShieldCheck size={14} /> Превратить в правило проекта</ActionButton>
               </div>
             </div>
           </article>
         )) : <div className="rounded-[20px] border border-dashed border-line bg-white py-14 text-center text-sm text-muted">Решений по выбранным фильтрам нет.</div>}
       </div>
       {promotion ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-ink/35" role="dialog" aria-modal="true" aria-label="Rule impact analysis">
+        <div className="fixed inset-0 z-50 flex justify-end bg-ink/35" role="dialog" aria-modal="true" aria-label="Анализ влияния правила">
           <button className="absolute inset-0 cursor-default" onClick={() => setPromotion(null)} aria-label="Закрыть" />
           <aside className="relative h-full w-full max-w-xl overflow-y-auto bg-white p-6 shadow-2xl sm:p-8">
             <div className="flex items-start justify-between">
-              <div><p className="text-sm font-bold text-violet">Rule promotion</p><h2 className="mt-2 text-2xl font-black">Rule impact analysis</h2></div>
+              <div><p className="text-sm font-bold text-violet">Продвижение решения</p><h2 className="mt-2 text-2xl font-black">Анализ влияния правила</h2></div>
               <button onClick={() => setPromotion(null)} className="flex size-10 items-center justify-center rounded-xl border border-line"><X size={18} /></button>
             </div>
             <div className="mt-7 rounded-2xl bg-[#fafaff] p-5">
-              <p className="text-xs font-black uppercase tracking-[0.1em] text-muted">Rule target</p>
+              <p className="text-xs font-black uppercase tracking-[0.1em] text-muted">Объект правила</p>
               <p className="mt-2 font-black">{promotion.decision.target}</p>
               <p className="mt-1 text-sm text-muted">{promotion.decision.newValue || promotion.decision.reason}</p>
             </div>
-            <h3 className="mt-7 font-black">{promotion.impact.count} approved screens potentially affected</h3>
+            <h3 className="mt-7 font-black">Потенциально затронуто экранов: {promotion.impact.count}</h3>
             <div className="mt-4 space-y-3">
               {promotion.impact.affectedScreens.map((screen) => (
                 <div key={screen.id} className="rounded-2xl border border-line p-4">
@@ -138,12 +138,12 @@ export function DesignDecisionsPanel({ projectId, decisions }: { projectId: stri
             </div>
             <label className="mt-7 flex items-start gap-3 rounded-2xl border border-violet/15 bg-violet/[0.03] p-4 text-sm">
               <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} className="mt-0.5 size-4" />
-              Я подтверждаю создание или обновление ProjectRule.
+              Я подтверждаю создание или обновление правила проекта.
             </label>
             <div className="mt-6 flex justify-end gap-3">
-              <button onClick={() => setPromotion(null)} className="h-11 rounded-xl border border-line px-5 text-sm font-bold">Cancel</button>
+              <button onClick={() => setPromotion(null)} className="h-11 rounded-xl border border-line px-5 text-sm font-bold">Отмена</button>
               <button onClick={promote} disabled={!confirmed || busy === promotion.decision.id} className="inline-flex h-11 items-center gap-2 rounded-xl bg-violet px-5 text-sm font-bold text-white disabled:opacity-50">
-                {busy === promotion.decision.id ? <Loader2 size={16} className="animate-spin" /> : null} Promote rule
+                {busy === promotion.decision.id ? <Loader2 size={16} className="animate-spin" /> : null} Сохранить правило
               </button>
             </div>
           </aside>
@@ -154,11 +154,13 @@ export function DesignDecisionsPanel({ projectId, decisions }: { projectId: stri
 }
 
 function FilterSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: string[] }) {
-  return <label className="text-xs font-bold text-muted">{label}<select value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 block h-10 rounded-xl border border-line bg-white px-3 text-sm text-ink">{options.map((option) => <option key={option}>{option}</option>)}</select></label>;
+  return <label className="text-xs font-bold text-muted">{label}<select value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 block h-10 rounded-xl border border-line bg-white px-3 text-sm text-ink">{options.map((option) => <option key={option} value={option}>{filterLabels[option] || option}</option>)}</select></label>;
 }
+const filterLabels: Record<string, string> = { all: "Все", proposed: "Предложено", approved: "Утверждено", rejected: "Отклонено", global_rule: "Глобальное правило", local_override: "Локальная правка", component_decision: "Компонент", layout_decision: "Расположение", typography_decision: "Типографика", color_decision: "Цвет", ai_suggestion: "Предложение AI" };
 function StatusBadge({ status }: { status: string }) {
   const color = status === "approved" ? "bg-emerald-50 text-emerald-700" : status === "rejected" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700";
-  return <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${color}`}>{status}</span>;
+  const label = status === "approved" ? "Утверждено" : status === "rejected" ? "Отклонено" : "Предложено";
+  return <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${color}`}>{label}</span>;
 }
 function ActionButton({ children, onClick, disabled, danger = false }: { children: React.ReactNode; onClick: () => void; disabled: boolean; danger?: boolean }) {
   return <button onClick={onClick} disabled={disabled} className={`inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-bold disabled:opacity-50 ${danger ? "border-red-200 text-red-600" : "border-violet/25 text-violet"}`}>{children}</button>;

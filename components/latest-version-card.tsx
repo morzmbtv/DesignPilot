@@ -1,5 +1,6 @@
 import { Clock3, Layers3 } from "lucide-react";
 import { VersionCopyActions } from "./version-copy-actions";
+import { ModeOnly } from "./interface-mode";
 
 export function LatestVersionCard({
   version,
@@ -22,19 +23,16 @@ export function LatestVersionCard({
           <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-violet/10 text-violet"><Layers3 size={20} /></span>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-black tracking-[-0.025em]">Latest version</h2>
-              <span className="rounded-full bg-violet/10 px-2.5 py-1 text-xs font-bold text-violet">Version {version.versionNumber}</span>
-              {approved ? <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Approved</span> : <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">Draft</span>}
+              <h2 className="text-xl font-black tracking-[-0.025em]">Последняя версия</h2>
+              <span className="rounded-full bg-violet/10 px-2.5 py-1 text-xs font-bold text-violet">Версия {version.versionNumber}</span>
+              {approved ? <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Утверждена</span> : <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">Черновик</span>}
             </div>
             <p className="mt-2 text-sm leading-6 text-muted">{version.changeSummary || "Последняя сохранённая версия экрана."}</p>
           </div>
         </div>
         <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted"><Clock3 size={14} /> {formattedDate}</span>
       </div>
-      <div className="mt-6 grid gap-4 xl:grid-cols-2">
-        <VersionPreview title="Design Spec" value={version.designSpec} mono={false} />
-        <VersionPreview title="Image Prompt" value={version.imagePrompt} mono />
-      </div>
+      <ModeOnly mode="expert"><div className="mt-6 grid gap-4 xl:grid-cols-2"><VersionPreview title="Спецификация дизайна" value={version.designSpec} mono={false} /><VersionPreview title="Промпт для изображения" value={version.imagePrompt} mono /></div></ModeOnly>
       <div className="mt-5">
         <VersionCopyActions designSpec={version.designSpec} imagePrompt={version.imagePrompt} />
       </div>

@@ -5,11 +5,13 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   editCurrentScreenVersion,
+  checkLockedEditIntent,
   saveSuggestedProjectRule,
   type EditScreenVersionResult,
   type SuggestedRule,
 } from "@/app/projects/[id]/screens/[screenId]/edit-actions";
 import { AiContextViewer } from "@/components/ai-context-viewer";
+import { ModeOnly } from "@/components/interface-mode";
 
 type SuccessResult = Extract<EditScreenVersionResult, { ok: true }>;
 
@@ -33,10 +35,15 @@ export function EditCurrentVersionPanel({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    setIsEditing(true);
     setSavedRules([]);
     try {
-      const response = await editCurrentScreenVersion(projectId, screenId, request);
+      const lockCheck = await checkLockedEditIntent(projectId, screenId, request);
+      const unlockConfirmed = lockCheck.requiresConfirmation
+        ? window.confirm(`Элемент заблокирован. Разблокировать и изменить?\n\n${lockCheck.elements.join(", ")}`)
+        : false;
+      if (lockCheck.requiresConfirmation && !unlockConfirmed) return;
+      setIsEditing(true);
+      const response = await editCurrentScreenVersion(projectId, screenId, request, undefined, unlockConfirmed);
       if (!response.ok) {
         setError(response.error);
         return;
@@ -77,7 +84,7 @@ export function EditCurrentVersionPanel({
               <FileDiff size={19} />
             </span>
             <div>
-              <h2 className="text-xl font-black tracking-[-0.02em]">Edit current version</h2>
+              <h2 className="text-xl font-black tracking-[-0.02em]">Изменить текущую версию</h2>
               <p className="mt-0.5 text-sm text-muted">
                 {currentVersionNumber
                   ? `Точечно изменит версию ${currentVersionNumber} и сохранит новую.`
@@ -110,9 +117,9 @@ export function EditCurrentVersionPanel({
                 className="inline-flex h-11 items-center gap-2 rounded-xl bg-ink px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isEditing ? <Loader2 size={17} className="animate-spin" /> : <Sparkles size={17} />}
-                {isEditing ? "Применяем правку…" : "Apply edit"}
+                {isEditing ? "Применяем правку…" : "Применить правку"}
               </button>
-              <AiContextViewer projectId={projectId} screenId={screenId} />
+              <ModeOnly mode="expert"><AiContextViewer projectId={projectId} screenId={screenId} /></ModeOnly>
             </div>
           </form>
 
@@ -123,45 +130,45 @@ export function EditCurrentVersionPanel({
           ) : null}
         </div>
 
-        <aside className="rounded-2xl border border-coral/15 bg-white p-5">
-          <p className="text-xs font-black uppercase tracking-[0.12em] text-coral">Edit contract</p>
+        <ModeOnly mode="expert"><aside className="rounded-2xl border border-coral/15 bg-white p-5">
+          <p className="text-xs font-black uppercase tracking-[0.12em] text-coral">Как будет применена правка</p>
           <ul className="mt-4 space-y-3 text-sm text-muted">
             <ContractItem>Только указанная часть</ContractItem>
             <ContractItem>Старую версию не меняем</ContractItem>
-            <ContractItem>ProjectRules соблюдаются</ContractItem>
+            <ContractItem>Правила проекта соблюдаются</ContractItem>
             <ContractItem>Глобальные правки — на подтверждение</ContractItem>
           </ul>
-        </aside>
+        </aside></ModeOnly>
       </div>
 
       {result ? (
         <div className="border-t border-coral/15 bg-white p-5 sm:p-7">
-          <p className="text-xs font-black uppercase tracking-[0.12em] text-coral">New version {result.versionNumber}</p>
+          <p className="text-xs font-black uppercase tracking-[0.12em] text-coral">Новая версия {result.versionNumber}</p>
           <h3 className="mt-1 text-xl font-black">{result.changeSummary}</h3>
 
           <div className="mt-5 rounded-2xl border border-coral/20 bg-[#fffaf8] p-5">
             <div className="flex items-center gap-2">
               <FileDiff size={18} className="text-coral" />
-              <p className="text-xs font-black uppercase tracking-[0.1em] text-muted">Diff</p>
+              <p className="text-xs font-black uppercase tracking-[0.1em] text-muted">Изменения</p>
             </div>
             <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-ink">{result.diff}</p>
           </div>
 
-          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          <ModeOnly mode="expert"><div className="mt-4 grid gap-3 lg:grid-cols-2">
             <details className="rounded-2xl border border-line p-4">
-              <summary className="cursor-pointer text-sm font-black">Updated Design Spec</summary>
+              <summary className="cursor-pointer text-sm font-black">Обновлённая спецификация</summary>
               <p className="mt-3 max-h-96 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-muted">{result.updatedDesignSpec}</p>
             </details>
             <details className="rounded-2xl border border-line p-4">
-              <summary className="cursor-pointer text-sm font-black">Updated Image Prompt</summary>
+              <summary className="cursor-pointer text-sm font-black">Обновлённый промпт</summary>
               <p className="mt-3 max-h-96 overflow-y-auto whitespace-pre-wrap font-mono text-sm leading-6 text-muted">{result.updatedImagePrompt}</p>
             </details>
-          </div>
+          </div></ModeOnly>
 
           {result.rulesToAddOrUpdate.length ? (
             <div className="mt-5 rounded-2xl border border-violet/15 bg-violet/[0.025] p-5">
               <h4 className="font-black">Глобальная правка</h4>
-              <p className="mt-1 text-sm text-muted">Сохранить её как ProjectRule для следующих экранов?</p>
+              <p className="mt-1 text-sm text-muted">Сохранить её как правило проекта для следующих экранов?</p>
               <div className="mt-4 space-y-3">
                 {result.rulesToAddOrUpdate.map((rule, index) => {
                   const key = `${rule.category}-${rule.name}-${index}`;

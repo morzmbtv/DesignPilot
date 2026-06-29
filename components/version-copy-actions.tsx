@@ -28,11 +28,11 @@ export function VersionCopyActions({
     <div className="flex flex-wrap gap-2">
       <button type="button" disabled={!designSpec} onClick={() => copy(designSpec, "spec")} className={classes}>
         {copied === "spec" ? <Check size={15} /> : <Copy size={15} />}
-        {copied === "spec" ? "Скопировано" : "Copy Design Spec"}
+        {copied === "spec" ? "Скопировано" : "Копировать спецификацию"}
       </button>
       <button type="button" disabled={!imagePrompt} onClick={() => copy(imagePrompt, "prompt")} className={classes}>
         {copied === "prompt" ? <Check size={15} /> : <Copy size={15} />}
-        {copied === "prompt" ? "Скопировано" : "Copy Prompt"}
+        {copied === "prompt" ? "Скопировано" : "Копировать промпт"}
       </button>
     </div>
   );

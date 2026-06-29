@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { ProjectTabs } from "@/components/project-tabs";
 import { createScreen } from "@/app/actions";
 import { prisma } from "@/lib/prisma";
+import { ScreenCreationWizard } from "@/components/screen-creation-wizard";
 
 export const dynamic = "force-dynamic";
 
@@ -33,8 +34,8 @@ export default async function ScreensPage({ params }: { params: { id: string } }
       </Link>
       <div className="mt-6 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm font-bold text-violet">{project.name} / Screens</p>
-          <h1 className="mt-3 text-4xl font-black tracking-[-0.05em] sm:text-5xl">Screens</h1>
+          <p className="text-sm font-bold text-violet">{project.name} / Экраны</p>
+          <h1 className="mt-3 text-4xl font-black tracking-[-0.05em] sm:text-5xl">Экраны</h1>
           <p className="mt-2 text-sm text-muted">Создавайте, проверяйте и утверждайте дизайн экранов.</p>
         </div>
       </div>
@@ -55,17 +56,17 @@ export default async function ScreensPage({ params }: { params: { id: string } }
                   </div>
                 </div>
                 <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${screen.status === "approved" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                  {screen.status === "approved" ? "Approved" : "Draft"}
+                  {screen.status === "approved" ? "Утверждён" : "Черновик"}
                 </span>
               </div>
               <div className="mt-5 rounded-2xl border border-line bg-[#fafaff] p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-extrabold uppercase tracking-[0.1em] text-violet">Latest version</p>
+                  <p className="text-xs font-extrabold uppercase tracking-[0.1em] text-violet">Последняя версия</p>
                   <span className="text-xs font-bold text-muted">{screen._count.versions} всего</span>
                 </div>
                 {latest ? (
                   <>
-                    <p className="mt-3 font-black text-ink">Version {latest.versionNumber}</p>
+                    <p className="mt-3 font-black text-ink">Версия {latest.versionNumber}</p>
                     <p className="mt-1 line-clamp-2 min-h-10 text-sm leading-5 text-muted">{latest.changeSummary || "Версия сохранена без описания изменений."}</p>
                     <p className="mt-3 flex items-center gap-1.5 text-xs text-muted"><Clock3 size={13} /> {dateFormatter.format(latest.createdAt)}</p>
                   </>
@@ -78,29 +79,13 @@ export default async function ScreensPage({ params }: { params: { id: string } }
           );}) : (
             <div className="col-span-full rounded-[20px] border border-dashed border-line bg-white py-14 text-center">
               <Layers3 className="mx-auto text-violet" size={32} />
-              <p className="mt-4 font-bold">Добавьте первый экран</p>
+              <p className="mt-4 font-bold">Пока нет экранов</p>
+              <p className="mt-2 text-sm text-muted">Создайте первый экран, например Splash.</p>
             </div>
           )}
         </section>
 
-        <aside className="h-fit rounded-[20px] border border-line bg-white p-5 shadow-[0_1px_2px_rgba(17,19,38,0.02)] 2xl:sticky 2xl:top-10">
-          <span className="flex size-10 items-center justify-center rounded-xl bg-violet/10 text-violet"><Plus size={19} /></span>
-          <h2 className="mt-4 text-xl font-black">Новый экран</h2>
-          <p className="mt-1 text-sm leading-5 text-muted">После создания откроется карточка экрана.</p>
-          <form action={create} className="mt-5 space-y-4">
-            <label className="block text-xs font-bold text-muted">
-              Название
-              <input name="name" required placeholder="Например, Онбординг" className="mt-2 w-full rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink" />
-            </label>
-            <label className="block text-xs font-bold text-muted">
-              Назначение
-              <textarea name="purpose" rows={3} placeholder="Что видит и делает пользователь?" className="mt-2 w-full resize-y rounded-xl border border-line bg-white px-3 py-2.5 text-sm leading-5 text-ink" />
-            </label>
-            <button className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-violet text-sm font-bold text-white hover:bg-[#4e30df]">
-              <Plus size={16} /> Создать экран
-            </button>
-          </form>
-        </aside>
+        <aside className="h-fit 2xl:sticky 2xl:top-10"><ScreenCreationWizard action={create} /></aside>
       </div>
     </AppShell>
   );

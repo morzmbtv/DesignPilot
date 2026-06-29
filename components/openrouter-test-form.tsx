@@ -62,12 +62,12 @@ export function OpenRouterTestForm({
           className="mt-5 inline-flex h-11 items-center gap-2 rounded-xl bg-violet px-5 text-sm font-bold text-white shadow-soft disabled:cursor-not-allowed disabled:opacity-50"
         >
           {result.status === "loading" ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}
-          {result.status === "loading" ? "Отправляем…" : "Test request"}
+          {result.status === "loading" ? "Отправляем…" : "Тестовый запрос"}
         </button>
       </form>
 
       <section className="min-h-64 rounded-[22px] bg-ink p-6 text-white" aria-live="polite">
-        <p className="text-xs font-black uppercase tracking-[0.13em] text-white/45">Model response</p>
+        <p className="text-xs font-black uppercase tracking-[0.13em] text-white/45">Ответ модели</p>
         {result.status === "idle" ? (
           <p className="mt-5 text-sm leading-6 text-white/60">Ответ модели появится здесь после тестового запроса.</p>
         ) : null}

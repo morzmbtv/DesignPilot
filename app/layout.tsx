@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { InterfaceModeProvider } from "@/components/interface-mode";
 
 export const metadata: Metadata = {
   title: "EDUS AI — Design Prompt Builder",
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ru">
-      <body>{children}</body>
+      <body><InterfaceModeProvider>{children}</InterfaceModeProvider></body>
     </html>
   );
 }

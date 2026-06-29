@@ -53,6 +53,22 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
+.wireframe-grid {
+  background-image:
+    linear-gradient(rgba(93, 61, 245, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(93, 61, 245, 0.07) 1px, transparent 1px);
+  background-size: calc(100% * 4 / 390) calc(100% * 4 / 844);
+}
+
+@layer components {
+  .editor-action {
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-sm font-bold text-ink transition hover:border-violet/30 hover:text-violet;
+  }
+  .lib-button {
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-xl px-3 text-sm font-bold transition disabled:opacity-50;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .lift {
     transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;

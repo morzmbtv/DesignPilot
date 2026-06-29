@@ -22,6 +22,33 @@ async function main() {
           { category: "Компоненты", name: "Главное действие", value: "Один primary CTA на экран", source: "brief" },
         ],
       },
+      designTokens: {
+        create: [
+          { group: "Цвета", name: "primary", value: "#5D3DF5", source: "seed" },
+          { group: "Радиусы", name: "card", value: "20px", source: "seed" },
+          { group: "Отступы", name: "page", value: "20px", source: "seed" },
+          { group: "Типографика", name: "body", value: "16px/24px", source: "seed" },
+        ],
+      },
+      designComponents: {
+        create: [{
+          name: "Основная кнопка",
+          description: "Главное действие экрана.",
+          category: "Buttons",
+          source: "seed",
+          approved: true,
+          status: "approved",
+          createdBy: "system",
+          dimensions: JSON.stringify({ height: 52 }),
+          radius: "12px",
+          colors: JSON.stringify(["primary"]),
+          typography: JSON.stringify(["body"]),
+          states: JSON.stringify(["default", "pressed", "disabled"]),
+          variants: JSON.stringify(["primary"]),
+          usageGuidelines: "Не более одного главного действия на экран.",
+          accessibilityNotes: "Контраст не ниже WCAG AA, touch target не менее 44px.",
+        }],
+      },
       screens: {
         create: [
           {

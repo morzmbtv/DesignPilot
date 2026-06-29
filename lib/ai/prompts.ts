@@ -1,12 +1,14 @@
 import "server-only";
 
 import type { OpenRouterMessage } from "@/lib/openrouter";
+import type { LayoutJson } from "@/lib/layout";
 
 export type VersionSummary = {
   versionNumber: number;
   designSpec: string;
   imagePrompt: string;
   changeSummary: string;
+  layoutJson?: LayoutJson | null;
 };
 
 export type ScreenEditPromptContext = {
@@ -67,6 +69,11 @@ export type ScreenGenerationPromptContext = {
     purpose: string;
     status: string;
   }>;
+  designLibrary: {
+    source: string;
+    approvedComponents: Array<{ id: string; name: string; category: string; description: string; layoutJson: string | null; states: string | null; variants: string | null }>;
+    tokens: Array<{ group: string; name: string; value: string }>;
+  };
 };
 
 const SCREEN_GENERATION_SYSTEM_PROMPT = `Ты AI Design Spec Architect.
@@ -114,6 +121,22 @@ DESIGN DECISIONS:
 - source всегда "ai", status всегда "proposed".
 - Если существенных решений нет, верни пустой массив decisions.
 
+COMPONENT INTELLIGENCE:
+- Запрещено придумывать новый стиль. Сначала ищи подходящий approved component в designLibrary.
+- Максимально переиспользуй существующие компоненты и токены.
+- Новый компонент допускается только если ничего подходящего нет; тогда добавь его в componentSuggestions для пользовательского подтверждения.
+- Минимизируй componentSuggestions. Не считай вариацию новым компонентом без необходимости.
+- Для каждого нового componentSuggestions обязательно верни отдельный валидный layoutJson 390x844: он станет Wireframe и источником HTML/Flutter артефактов компонента.
+- Все цвета, типографика, радиусы и отступы должны ссылаться на токены designLibrary.
+
+LAYOUT JSON:
+- Всегда возвращай layoutJson с viewport строго 390x844.
+- Каждый важный элемент designSpec должен иметь id, type, label, x, y, width, height.
+- Координаты абсолютные относительно viewport. Для «внизу» используй y 680–780 без bottom navigation и размещай выше bottom navigation, если она есть.
+- Для «сверху» используй y 44–120. Для «по центру» центрируй по x/y.
+- Недостаточно описать перемещение только в imagePrompt: оно обязательно отражается в layoutJson.
+- В imagePrompt добавляй STRICT LAYOUT с точными координатами изменённых элементов и фразу: "Preserve all other layout, colors, typography, spacing, and elements unchanged."
+
 ЗАПРЕЩЕНО:
 - менять или игнорировать существующие правила без явного запроса пользователя;
 - придумывать новый стиль без обоснованной причины;
@@ -127,6 +150,7 @@ DESIGN DECISIONS:
 {
   "designSpec": "подробная спецификация экрана",
   "imagePrompt": "готовый промпт для генерации изображения",
+  "layoutJson": { "viewport": { "width": 390, "height": 844 }, "elements": [] },
   "newRules": [
     {
       "category": "категория",
@@ -145,6 +169,26 @@ DESIGN DECISIONS:
       "reason": "почему принято решение",
       "source": "ai",
       "status": "proposed"
+    }
+  ],
+  "componentSuggestions": [
+    {
+      "name": "Название компонента",
+      "description": "назначение",
+      "category": "Cards",
+      "designSpec": "спецификация",
+      "imagePrompt": "промпт превью",
+      "layoutJson": {
+        "viewport": { "width": 390, "height": 844 },
+        "elements": [
+          { "id": "component_root", "type": "card", "label": "Название компонента", "x": 20, "y": 120, "width": 350, "height": 120, "align": "left", "style": "default", "radius": 16, "background": "#FFFFFF", "opacity": 1, "zIndex": 1, "locked": false }
+        ]
+      },
+      "states": ["default"],
+      "variants": [],
+      "usageGuidelines": "когда использовать",
+      "accessibilityNotes": "требования доступности",
+      "reason": "почему существующие компоненты не подходят"
     }
   ]
 }`;
@@ -205,6 +249,15 @@ DESIGN DECISIONS:
 - source: "ai", status: "proposed".
 - Если новых решений нет, decisions — пустой массив.
 
+LAYOUT JSON:
+- Всегда возвращай полный updatedLayoutJson. Текущий layoutJson находится в контексте.
+- Любая правка расположения должна менять x/y/width/height соответствующего элемента.
+- Не меняй остальные элементы без запроса.
+- Элементы с locked=true защищены: не перемещай, не меняй, не удаляй и не переименовывай их.
+- Исключение возможно только если пользователь явно просит разблокировать или изменить конкретный заблокированный элемент. Тогда установи для него locked=false и измени только его.
+- Для «внизу» используй y 680–780, для «сверху» y 44–120, для «по центру» центрируй x/y.
+- updatedImagePrompt обязан содержать STRICT LAYOUT и "Preserve all other layout, colors, typography, spacing, and elements unchanged."
+
 ЗАПРЕЩЕНО:
 - переписывать весь дизайн в новом стиле;
 - менять существующие правила без явного запроса;
@@ -217,6 +270,7 @@ DESIGN DECISIONS:
 {
   "updatedDesignSpec": "полная обновлённая спецификация",
   "updatedImagePrompt": "полный обновлённый промпт",
+  "updatedLayoutJson": { "viewport": { "width": 390, "height": 844 }, "elements": [] },
   "rulesToAddOrUpdate": [
     {
       "category": "категория",

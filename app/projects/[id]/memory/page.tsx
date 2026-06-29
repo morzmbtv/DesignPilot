@@ -6,6 +6,8 @@ import { ProjectMemoryEditor } from "@/components/project-memory-editor";
 import { ProjectTabs } from "@/components/project-tabs";
 import { deleteProject } from "@/app/actions";
 import { prisma } from "@/lib/prisma";
+import { ModeOnly } from "@/components/interface-mode";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -54,14 +56,9 @@ export default async function ProjectMemoryPage({ params }: { params: { id: stri
         <div>
           <h1 className="text-4xl font-black tracking-[-0.045em] sm:text-5xl">{project.name}</h1>
           <p className="mt-3 max-w-2xl text-[15px] leading-6 text-muted">
-            Project Memory хранит постоянный контекст продукта для всех экранов и будущих генераций.
+            Память проекта хранит стиль, цели и требования для всех будущих экранов.
           </p>
         </div>
-        <form action={remove}>
-          <button aria-label="Удалить проект" className="flex size-11 items-center justify-center rounded-xl border border-line text-muted hover:border-red-200 hover:text-red-600">
-            <Trash2 size={18} />
-          </button>
-        </form>
       </div>
       <ProjectTabs id={project.id} active="memory" />
       <section className="mt-8 rounded-[22px] border border-emerald-100 bg-white p-5 shadow-[0_1px_2px_rgba(17,19,38,0.02)] sm:p-7">
@@ -70,7 +67,7 @@ export default async function ProjectMemoryPage({ params }: { params: { id: stri
             <CheckCircle2 size={20} />
           </span>
           <div>
-            <h2 className="text-xl font-black">Approved screens</h2>
+            <h2 className="text-xl font-black">Утверждённые экраны</h2>
             <p className="mt-0.5 text-sm text-muted">Только эти версии используются как источник истины для следующих экранов.</p>
           </div>
         </div>
@@ -85,7 +82,7 @@ export default async function ProjectMemoryPage({ params }: { params: { id: stri
                 <span>
                   <span className="block font-black">{screen.name}</span>
                   <span className="mt-1 block text-sm text-muted">
-                    Version {screen.approvedVersion?.versionNumber}
+                    Версия {screen.approvedVersion?.versionNumber}
                     {screen.approvedVersion?.changeSummary ? ` · ${screen.approvedVersion.changeSummary}` : ""}
                   </span>
                   {screen.summaries[0] ? <span className="mt-2 block text-sm leading-5 text-ink">{screen.summaries[0].summary}</span> : null}
@@ -101,6 +98,7 @@ export default async function ProjectMemoryPage({ params }: { params: { id: stri
         )}
       </section>
       <ProjectMemoryEditor projectId={project.id} initialMemory={initialMemory} initialRules={initialRules} />
+      <ModeOnly mode="expert"><details className="mt-8 rounded-2xl border border-red-100 bg-white p-5"><summary className="cursor-pointer text-sm font-bold text-red-600">Дополнительно</summary><form action={remove} className="mt-4"><ConfirmSubmitButton message={`Удалить проект «${project.name}» вместе со всеми экранами?`} className="inline-flex h-10 items-center gap-2 rounded-xl border border-red-200 px-4 text-sm font-bold text-red-600"><Trash2 size={16} /> Удалить проект</ConfirmSubmitButton></form></details></ModeOnly>
     </AppShell>
   );
 }

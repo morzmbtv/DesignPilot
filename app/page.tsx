@@ -22,8 +22,8 @@ export default async function ProjectsPage() {
     <AppShell>
       <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm font-bold text-violet">Workspace / Projects</p>
-          <h1 className="mt-4 text-4xl font-black tracking-[-0.05em] text-ink sm:text-5xl">Projects</h1>
+          <p className="text-sm font-bold text-violet">Рабочее пространство / Проекты</p>
+          <h1 className="mt-4 text-4xl font-black tracking-[-0.05em] text-ink sm:text-5xl">Проекты</h1>
           <p className="mt-3 max-w-xl text-[15px] leading-6 text-muted">
             Создавайте и развивайте дизайн-системы мобильных продуктов.
           </p>
@@ -62,8 +62,8 @@ export default async function ProjectsPage() {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <dt className="text-muted">Статус</dt>
                     <dd className="flex gap-2">
-                      {draft > 0 ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">{draft} Draft</span> : null}
-                      {approved > 0 ? <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">{approved} Approved</span> : null}
+                      {draft > 0 ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">{draft} черновик</span> : null}
+                      {approved > 0 ? <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">{approved} утверждено</span> : null}
                       {!draft && !approved ? <span className="text-xs font-bold text-muted">Нет экранов</span> : null}
                     </dd>
                   </div>
@@ -73,7 +73,7 @@ export default async function ProjectsPage() {
                   </div>
                 </dl>
                 <Link
-                  href={`/projects/${project.id}/memory`}
+                  href={`/projects/${project.id}`}
                   className="group mt-auto flex items-center justify-between border-t border-line pt-5 text-sm font-black text-violet"
                 >
                   Открыть проект

@@ -1,9 +1,10 @@
 "use client";
 
-import { BrainCircuit, FileCode2, FolderOpen, MonitorSmartphone, Scale, Settings, ShieldCheck } from "lucide-react";
+import { FileClock, FolderOpen, Library, MonitorSmartphone, Scale, Settings, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useInterfaceMode } from "./interface-mode";
 
 export function AppNavigation({
   projectId,
@@ -13,6 +14,7 @@ export function AppNavigation({
   mobile?: boolean;
 }) {
   const pathname = usePathname();
+  const { mode } = useInterfaceMode();
   const [hash, setHash] = useState("");
 
   useEffect(() => {
@@ -23,48 +25,47 @@ export function AppNavigation({
   }, [pathname]);
 
   const items = [
-    { href: "/", label: "Projects", icon: FolderOpen, active: pathname === "/" || pathname === "/projects/new" },
-    {
-      href: projectId ? `/projects/${projectId}/memory` : "/",
-      label: "Memory",
-      icon: BrainCircuit,
-      disabled: !projectId,
-      active: Boolean(projectId && pathname.includes(`/projects/${projectId}/memory`) && hash !== "#project-rules"),
-    },
+    { href: "/", label: "Проекты", icon: FolderOpen, active: pathname === "/" || pathname === "/projects/new" },
     {
       href: projectId ? `/projects/${projectId}/screens` : "/",
-      label: "Screens",
+      label: "Экраны",
       icon: MonitorSmartphone,
       disabled: !projectId,
       active: Boolean(projectId && pathname.includes(`/projects/${projectId}/screens`)),
     },
     {
+      href: projectId ? `/projects/${projectId}/library` : "/",
+      label: "Библиотека дизайна",
+      icon: Library,
+      disabled: !projectId,
+      active: Boolean(projectId && pathname.includes(`/projects/${projectId}/library`)),
+    },
+    {
       href: projectId ? `/projects/${projectId}/memory#project-rules` : "/",
-      label: "Rules",
+      label: "Правила",
       icon: ShieldCheck,
       disabled: !projectId,
       active: Boolean(projectId && pathname.includes(`/projects/${projectId}/memory`) && hash === "#project-rules"),
     },
     {
-      href: projectId ? `/projects/${projectId}/decisions` : "/",
-      label: "Decisions",
-      icon: Scale,
-      disabled: !projectId,
-      active: Boolean(projectId && pathname.includes(`/projects/${projectId}/decisions`)),
-    },
-    {
       href: projectId ? `/projects/${projectId}/ai-logs` : "/",
-      label: "AI Logs",
-      icon: FileCode2,
+      label: "Журнал",
+      icon: FileClock,
       disabled: !projectId,
       active: Boolean(projectId && pathname.includes(`/projects/${projectId}/ai-logs`)),
     },
-    {
+    ...(mode === "expert" ? [{
+      href: projectId ? `/projects/${projectId}/decisions` : "/",
+      label: "Решения",
+      icon: Scale,
+      disabled: !projectId,
+      active: Boolean(projectId && pathname.includes(`/projects/${projectId}/decisions`)),
+    }, {
       href: "/settings/openrouter",
-      label: "Settings",
+      label: "Настройки",
       icon: Settings,
       active: pathname.startsWith("/settings"),
-    },
+    }] : []),
   ];
 
   return (

@@ -5,6 +5,9 @@ import { buildScreenEditPrompt, type ScreenEditPromptContext } from "@/lib/ai/pr
 import { callOpenRouterTracked, completeAiPromptLog, OpenRouterError, type OpenRouterResponseFormat } from "@/lib/openrouter";
 import { prisma } from "@/lib/prisma";
 import { parseDecisions, saveDecisions, type DecisionInput } from "@/lib/design-intelligence";
+import { generateHtmlLayout } from "@/lib/design-code/html-layout-generator";
+import { generateFlutterWidgetTree } from "@/lib/design-code/flutter-tree-generator";
+import { validateLayoutJson, type LayoutElement, type LayoutJson } from "@/lib/layout";
 
 export type SuggestedRule = {
   category: string;
@@ -19,6 +22,7 @@ export type EditScreenVersionResult =
       versionNumber: number;
       updatedDesignSpec: string;
       updatedImagePrompt: string;
+      updatedLayoutJson: LayoutJson;
       rulesToAddOrUpdate: SuggestedRule[];
       changeSummary: string;
       diff: string;
@@ -42,6 +46,18 @@ const responseFormat: OpenRouterResponseFormat = {
         updatedImagePrompt: {
           type: "string",
           description: "Complete updated image generation prompt with only the requested change applied.",
+        },
+        updatedLayoutJson: {
+          type: "object", additionalProperties: false,
+          properties: {
+            viewport: { type: "object", additionalProperties: false, properties: { width: { type: "number" }, height: { type: "number" } }, required: ["width", "height"] },
+            elements: { type: "array", items: { type: "object", additionalProperties: false, properties: {
+              id: { type: "string" }, type: { type: "string" }, label: { type: "string" },
+              x: { type: "number" }, y: { type: "number" }, width: { type: "number" }, height: { type: "number" },
+              align: { type: "string" }, style: { type: "string" }, radius: { type: "number" },
+              background: { type: "string" }, opacity: { type: "number" }, zIndex: { type: "number" }, locked: { type: "boolean" },
+            }, required: ["id", "type", "label", "x", "y", "width", "height", "align", "style", "radius", "background", "opacity", "zIndex", "locked"] } },
+          }, required: ["viewport", "elements"],
         },
         rulesToAddOrUpdate: {
           type: "array",
@@ -84,6 +100,7 @@ const responseFormat: OpenRouterResponseFormat = {
       required: [
         "updatedDesignSpec",
         "updatedImagePrompt",
+        "updatedLayoutJson",
         "rulesToAddOrUpdate",
         "changeSummary",
         "diff",
@@ -97,6 +114,8 @@ export async function editCurrentScreenVersion(
   projectId: string,
   screenId: string,
   userRequest: string,
+  selectedElementId?: string,
+  unlockConfirmed = false,
 ): Promise<EditScreenVersionResult> {
   const request = userRequest.trim();
   if (!request) return { ok: false, error: "Введите правку для текущей версии." };
@@ -117,6 +136,12 @@ export async function editCurrentScreenVersion(
   const latestVersion = screen.versions[0];
   if (!latestVersion) {
     return { ok: false, error: "Сначала создайте первую версию экрана через AI Generate." };
+  }
+  const currentLayout = latestVersion.layoutJson ? validateLayoutJson(JSON.parse(latestVersion.layoutJson)).layout : null;
+  const lockedElements = currentLayout?.elements.filter((element) => element.locked) ?? [];
+  const lockedIntent = detectsLockedEdit(request) && lockedElements.length > 0;
+  if (lockedIntent && !unlockConfirmed) {
+    return { ok: false, error: "Элемент заблокирован. Разблокировать и изменить?" };
   }
 
   const context: ScreenEditPromptContext = {
@@ -143,6 +168,7 @@ export async function editCurrentScreenVersion(
       imagePrompt: latestVersion.imagePrompt,
       changeSummary: latestVersion.changeSummary,
       diff: latestVersion.diff,
+      layoutJson: latestVersion.layoutJson ? JSON.parse(latestVersion.layoutJson) : null,
     },
   };
 
@@ -159,7 +185,44 @@ export async function editCurrentScreenVersion(
     );
     logId = tracked.logId;
     const edited = parseEditedScreen(tracked.text);
+    const targetedLockedIds = getTargetedLockedIds(lockedElements, request, selectedElementId);
+    const changedLocked = lockedElements.filter((element) => {
+      const candidate = edited.updatedLayoutJson.elements.find((item) => item.id === element.id);
+      return !candidate || JSON.stringify(candidate) !== JSON.stringify(element);
+    });
+    if (changedLocked.length && !unlockConfirmed) {
+      await completeAiPromptLog(logId, { parsedResponse: edited, error: "LOCKED_ELEMENT_CHANGED" });
+      return { ok: false, error: `AI попытался изменить заблокированный элемент: ${changedLocked.map((item) => item.label || item.id).join(", ")}.` };
+    }
+    if (unlockConfirmed) {
+      const deletedLocked = changedLocked.filter((element) => !edited.updatedLayoutJson.elements.some((candidate) => candidate.id === element.id));
+      if (deletedLocked.length) {
+        await completeAiPromptLog(logId, { parsedResponse: edited, error: "LOCKED_ELEMENT_DELETED" });
+        return { ok: false, error: "AI не может удалить заблокированный элемент. Сначала разблокируйте его в редакторе расположения." };
+      }
+      const changedOutsideTarget = changedLocked.filter((element) => !targetedLockedIds.has(element.id));
+      if (changedOutsideTarget.length) {
+        await completeAiPromptLog(logId, { parsedResponse: edited, error: "NON_TARGET_LOCKED_ELEMENT_CHANGED" });
+        return { ok: false, error: `AI попытался изменить другой заблокированный элемент: ${changedOutsideTarget.map((item) => item.label || item.id).join(", ")}.` };
+      }
+      edited.updatedLayoutJson = {
+        ...edited.updatedLayoutJson,
+        elements: edited.updatedLayoutJson.elements.map((candidate) => {
+          const original = lockedElements.find((element) => element.id === candidate.id);
+          if (!original) return candidate;
+          return targetedLockedIds.has(candidate.id) ? { ...candidate, locked: false } : original;
+        }),
+      };
+    }
+    const layoutIntent = /ниже|выше|внизу|сверху|слева|справа|опустить|поднять|увеличить|уменьшить|шире|уже|размер|расположение|позиция/i.test(request);
+    if (layoutIntent && latestVersion.layoutJson && JSON.stringify(JSON.parse(latestVersion.layoutJson)) === JSON.stringify(edited.updatedLayoutJson)) {
+      await completeAiPromptLog(logId, { parsedResponse: { ...edited, detectedEditIntent: "layout", selectedElementId: selectedElementId || null, validationErrors: [] }, error: "LAYOUT_NOT_MODIFIED" });
+      return { ok: false, error: "AI не изменил расположение элементов для этой правки." };
+    }
 
+    const codeRules = screen.project.rules.map(({ category, name, value }) => ({ category, name, value }));
+    const htmlLayout = generateHtmlLayout(edited.updatedLayoutJson, edited.updatedDesignSpec, codeRules);
+    const flutterWidgetTree = generateFlutterWidgetTree(edited.updatedLayoutJson, edited.updatedDesignSpec, codeRules);
     const version = await prisma.$transaction(async (tx) => {
       const latest = await tx.screenVersion.findFirst({
         where: { screenId },
@@ -176,13 +239,16 @@ export async function editCurrentScreenVersion(
           changeSummary: edited.changeSummary,
           diff: edited.diff,
           newRulesJson: JSON.stringify(edited.rulesToAddOrUpdate),
+          layoutJson: JSON.stringify(edited.updatedLayoutJson),
+          htmlLayout,
+          flutterWidgetTree,
         },
         select: { id: true, versionNumber: true },
       });
       await saveDecisions(tx, { projectId, screenId, screenVersionId: created.id, decisions: edited.decisions });
       return created;
     });
-    await completeAiPromptLog(logId, { parsedResponse: edited, screenVersionId: version.id });
+    await completeAiPromptLog(logId, { parsedResponse: { ...edited, detectedEditIntent: layoutIntent ? "layout" : "content", selectedElementId: selectedElementId || null, validationErrors: [] }, screenVersionId: version.id });
 
     revalidatePath(`/projects/${projectId}/screens`);
     revalidatePath(`/projects/${projectId}/screens/${screenId}`);
@@ -193,15 +259,42 @@ export async function editCurrentScreenVersion(
       ...edited,
     };
   } catch (error) {
-    if (logId && error instanceof Error && error.message === "INVALID_AI_JSON") {
-      await completeAiPromptLog(logId, { error: "INVALID_AI_JSON" });
+    if (logId && error instanceof Error && (error.message === "INVALID_AI_JSON" || error.message.startsWith("INVALID_LAYOUT_JSON"))) {
+      await completeAiPromptLog(logId, { parsedResponse: { validationErrors: error.message.split(":").slice(1), selectedElementId: selectedElementId || null }, error: error.message });
     }
     if (error instanceof OpenRouterError) return { ok: false, error: error.message };
     if (error instanceof Error && error.message === "INVALID_AI_JSON") {
       return { ok: false, error: "Модель вернула JSON в неверном формате. Повторите правку." };
     }
+    if (error instanceof Error && error.message.startsWith("INVALID_LAYOUT_JSON")) return { ok: false, error: "AI не вернул корректную схему экрана." };
     return { ok: false, error: "Не удалось создать отредактированную версию." };
   }
+}
+
+export async function checkLockedEditIntent(projectId: string, screenId: string, userRequest: string) {
+  const latest = await prisma.screenVersion.findFirst({
+    where: { screenId, screen: { projectId } },
+    orderBy: { versionNumber: "desc" },
+    select: { layoutJson: true },
+  });
+  if (!latest?.layoutJson || !detectsLockedEdit(userRequest)) return { requiresConfirmation: false, elements: [] as string[] };
+  const parsed = validateLayoutJson(JSON.parse(latest.layoutJson));
+  const elements = parsed.layout?.elements.filter((element) => element.locked).map((element) => element.label || element.id) ?? [];
+  return { requiresConfirmation: elements.length > 0, elements };
+}
+
+function detectsLockedEdit(request: string) {
+  return /разблокир|заблокированн|locked/i.test(request);
+}
+
+function getTargetedLockedIds(locked: LayoutElement[], request: string, selectedElementId?: string) {
+  const normalized = request.toLowerCase();
+  const matched = locked.filter((element) =>
+    element.id === selectedElementId ||
+    normalized.includes(element.id.toLowerCase()) ||
+    (element.label && normalized.includes(element.label.toLowerCase())));
+  if (!matched.length && locked.length === 1) return new Set([locked[0].id]);
+  return new Set(matched.map((element) => element.id));
 }
 
 export async function saveSuggestedProjectRule(
@@ -243,6 +336,8 @@ function parseEditedScreen(raw: string) {
 
     const updatedDesignSpec = requiredString(parsed.updatedDesignSpec);
     const updatedImagePrompt = requiredString(parsed.updatedImagePrompt);
+    const layoutResult = validateLayoutJson(parsed.updatedLayoutJson);
+    if (!layoutResult.valid || !layoutResult.layout) throw new Error(`INVALID_LAYOUT_JSON:${layoutResult.errors.join("|")}`);
     const changeSummary = requiredString(parsed.changeSummary);
     const diff = requiredString(parsed.diff);
     if (!Array.isArray(parsed.rulesToAddOrUpdate)) throw new Error("INVALID_AI_JSON");
@@ -260,6 +355,7 @@ function parseEditedScreen(raw: string) {
     return {
       updatedDesignSpec,
       updatedImagePrompt,
+      updatedLayoutJson: layoutResult.layout,
       rulesToAddOrUpdate,
       changeSummary,
       diff,
