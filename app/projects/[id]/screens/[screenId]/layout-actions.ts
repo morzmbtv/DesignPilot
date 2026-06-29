@@ -5,8 +5,13 @@ import { prisma } from "@/lib/prisma";
 import { createBlankLayout, parseLayoutJson, validateLayoutJson, type LayoutJson } from "@/lib/layout";
 import { generateHtmlLayout } from "@/lib/design-code/html-layout-generator";
 import { generateFlutterWidgetTree } from "@/lib/design-code/flutter-tree-generator";
+import { assertProjectAccess, assertScreenAccess, assertVersionAccess, requireUser } from "@/lib/security";
 
 export async function saveManualLayoutVersion(projectId: string, screenId: string, baseVersionId: string, layout: LayoutJson) {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
+  await assertScreenAccess(screenId, user.id);
+  await assertVersionAccess(baseVersionId, user.id);
   const validation = validateLayoutJson(layout);
   if (!validation.valid || !validation.layout) return { ok: false as const, error: validation.errors.join("; ") };
   const base = await prisma.screenVersion.findFirst({
@@ -51,12 +56,20 @@ export async function saveManualLayoutVersion(projectId: string, screenId: strin
 }
 
 export async function generateFallbackLayout(projectId: string, screenId: string, baseVersionId: string) {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
+  await assertScreenAccess(screenId, user.id);
+  await assertVersionAccess(baseVersionId, user.id);
   const screen = await prisma.screen.findFirst({ where: { id: screenId, projectId }, select: { name: true } });
   if (!screen) return { ok: false as const, error: "Экран не найден." };
   return saveManualLayoutVersion(projectId, screenId, baseVersionId, createBlankLayout(screen.name));
 }
 
 export async function saveDesignCodeVersion(projectId: string, screenId: string, baseVersionId: string, htmlOverride?: string, layoutOverride?: LayoutJson) {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
+  await assertScreenAccess(screenId, user.id);
+  await assertVersionAccess(baseVersionId, user.id);
   const base = await prisma.screenVersion.findFirst({
     where: { id: baseVersionId, screenId, screen: { projectId } },
     include: { screen: { include: { project: { include: { rules: true } } } } },

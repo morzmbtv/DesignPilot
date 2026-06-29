@@ -10,6 +10,7 @@ import { processGeneratedComponents } from "@/app/projects/[id]/library/actions"
 import { generateHtmlLayout } from "@/lib/design-code/html-layout-generator";
 import { generateFlutterWidgetTree } from "@/lib/design-code/flutter-tree-generator";
 import { styleSimilarity, type ComponentCandidate } from "@/lib/design-library/intelligence";
+import { assertProjectAccess, assertScreenAccess, requireUser } from "@/lib/security";
 
 export type GeneratedRule = {
   category: string;
@@ -144,6 +145,9 @@ export async function generateScreenWithAI(
   screenId: string,
   userRequest: string,
 ): Promise<GenerateScreenResult> {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
+  await assertScreenAccess(screenId, user.id);
   const request = userRequest.trim();
   if (!request) return { ok: false, error: "Введите запрос для генерации." };
 
@@ -299,6 +303,9 @@ export async function previewScreenAiContext(
   projectId: string,
   screenId: string,
 ): Promise<AiContextPreviewResult> {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
+  await assertScreenAccess(screenId, user.id);
   const screen = await prisma.screen.findFirst({
     where: { id: screenId, projectId },
     include: {

@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { ButtonLink } from "@/components/button";
 import { ProjectIcon } from "@/components/project-icon";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/security";
 import Link from "next/link";
 
 const dateFormatter = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", year: "numeric" });
@@ -10,7 +11,9 @@ const dateFormatter = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: 
 export const dynamic = "force-dynamic";
 
 export default async function ProjectsPage() {
+  const user = await requireUser();
   const projects = await prisma.project.findMany({
+    where: { userId: user.id },
     include: {
       screens: { select: { status: true } },
       _count: { select: { screens: true } },

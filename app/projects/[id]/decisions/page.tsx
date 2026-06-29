@@ -4,12 +4,14 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { DesignDecisionsPanel } from "@/components/design-decisions-panel";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
 export default async function DecisionsPage({ params }: { params: { id: string } }) {
-  const project = await prisma.project.findUnique({
-    where: { id: params.id },
+  const user = await requireUser();
+  const project = await prisma.project.findFirst({
+    where: { id: params.id, userId: user.id },
     include: {
       designDecisions: {
         include: { screen: { select: { id: true, name: true } } },

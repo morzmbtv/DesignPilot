@@ -1,3 +1,2 @@
-# Prisma migration history: PostgreSQL baseline only.
-# Keep this file and 20260629150000_postgresql_baseline/migration.sql in version control.
+# Prisma migration history for PostgreSQL production.
 provider = "postgresql"

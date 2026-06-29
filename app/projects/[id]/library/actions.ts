@@ -6,13 +6,18 @@ import { prisma } from "@/lib/prisma";
 import { componentSimilarity, type ComponentCandidate } from "@/lib/design-library/intelligence";
 import { generateHtmlLayout } from "@/lib/design-code/html-layout-generator";
 import { generateFlutterWidgetTree } from "@/lib/design-code/flutter-tree-generator";
+import { assertProjectAccess, requireUser } from "@/lib/security";
 
 export async function setDesignSystemSource(projectId: string, source: string) {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
   await prisma.project.update({ where: { id: projectId }, data: { designSystemSource: source } });
   revalidatePath(`/projects/${projectId}/library`);
 }
 
 export async function setComponentStatus(projectId: string, componentId: string, status: "approved" | "rejected") {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
   const component = await prisma.designComponent.findFirst({ where: { id: componentId, projectId } });
   if (!component) return { ok: false as const, error: "Компонент не найден." };
   const history = parseList(component.approveHistory);
@@ -26,6 +31,8 @@ export async function setComponentStatus(projectId: string, componentId: string,
 }
 
 export async function reuseExistingComponent(projectId: string, draftId: string) {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
   const draft = await prisma.designComponent.findFirst({ where: { id: draftId, projectId, status: "draft" } });
   if (!draft) return { ok: false as const, error: "Черновик компонента не найден." };
   const basedOnId = parseList(draft.basedOnComponents).find((value): value is string => typeof value === "string");
@@ -72,6 +79,8 @@ export async function reuseExistingComponent(projectId: string, draftId: string)
 }
 
 export async function saveDesignToken(projectId: string, input: { group: string; name: string; value: string; description?: string }) {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
   if (!input.name.trim() || !input.value.trim()) return { ok: false as const, error: "Укажите название и значение токена." };
   await prisma.designToken.upsert({
     where: { projectId_group_name: { projectId, group: input.group, name: input.name.trim() } },
@@ -86,6 +95,8 @@ export async function saveDesignComponent(projectId: string, componentId: string
   name: string; description: string; category: string; layoutJson: string;
   states: string; variants: string; usageGuidelines: string; accessibilityNotes: string;
 }) {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
   const component = await prisma.designComponent.findFirst({ where: { id: componentId, projectId } });
   if (!component) return { ok: false as const, error: "Компонент не найден." };
   if (!input.name.trim()) return { ok: false as const, error: "Название компонента обязательно." };
@@ -108,6 +119,8 @@ export async function saveDesignComponent(projectId: string, componentId: string
 }
 
 export async function analyzeDesignImport(projectId: string, formData: FormData) {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
   const type = String(formData.get("type") || "layout_json");
   const payload = String(formData.get("payload") || "").trim();
   const uploadedFiles = formData.getAll("files").filter((value): value is File => value instanceof File && value.size > 0);
@@ -247,6 +260,8 @@ async function createCandidate(projectId: string, candidate: ComponentCandidate,
 }
 
 export async function processGeneratedComponents(projectId: string, candidates: ComponentCandidate[], sourceScreenId: string, sourceScreenVersionId: string) {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
   const screen = await prisma.screen.findFirst({ where: { id: sourceScreenId, projectId }, select: { name: true } });
   for (const candidate of candidates) await createCandidate(projectId, candidate, "ai_generate", sourceScreenId, sourceScreenVersionId, screen?.name);
   revalidatePath(`/projects/${projectId}/library`);

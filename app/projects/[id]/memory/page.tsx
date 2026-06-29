@@ -6,14 +6,16 @@ import { ProjectMemoryEditor } from "@/components/project-memory-editor";
 import { ProjectTabs } from "@/components/project-tabs";
 import { deleteProject } from "@/app/actions";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/security";
 import { ModeOnly } from "@/components/interface-mode";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProjectMemoryPage({ params }: { params: { id: string } }) {
-  const project = await prisma.project.findUnique({
-    where: { id: params.id },
+  const user = await requireUser();
+  const project = await prisma.project.findFirst({
+    where: { id: params.id, userId: user.id },
     include: {
       rules: { orderBy: [{ category: "asc" }, { createdAt: "asc" }] },
       screens: {

@@ -8,6 +8,7 @@ import { parseDecisions, saveDecisions, type DecisionInput } from "@/lib/design-
 import { generateHtmlLayout } from "@/lib/design-code/html-layout-generator";
 import { generateFlutterWidgetTree } from "@/lib/design-code/flutter-tree-generator";
 import { validateLayoutJson, type LayoutElement, type LayoutJson } from "@/lib/layout";
+import { assertProjectAccess, assertScreenAccess, requireUser } from "@/lib/security";
 
 export type SuggestedRule = {
   category: string;
@@ -117,6 +118,9 @@ export async function editCurrentScreenVersion(
   selectedElementId?: string,
   unlockConfirmed = false,
 ): Promise<EditScreenVersionResult> {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
+  await assertScreenAccess(screenId, user.id);
   const request = userRequest.trim();
   if (!request) return { ok: false, error: "Введите правку для текущей версии." };
 
@@ -272,6 +276,9 @@ export async function editCurrentScreenVersion(
 }
 
 export async function checkLockedEditIntent(projectId: string, screenId: string, userRequest: string) {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
+  await assertScreenAccess(screenId, user.id);
   const latest = await prisma.screenVersion.findFirst({
     where: { screenId, screen: { projectId } },
     orderBy: { versionNumber: "desc" },
@@ -301,6 +308,8 @@ export async function saveSuggestedProjectRule(
   projectId: string,
   input: SuggestedRule,
 ): Promise<{ ok: true; mode: "created" | "updated" } | { ok: false; error: string }> {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
   const category = input.category.trim() || "Общее";
   const name = input.name.trim();
   const value = input.value.trim();

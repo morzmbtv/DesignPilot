@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import type { SuggestedRule } from "./edit-actions";
 import { createFallbackSummary } from "@/lib/design-intelligence";
+import { assertProjectAccess, assertScreenAccess, assertVersionAccess, requireUser } from "@/lib/security";
 
 export type ApproveVersionResult =
   | { ok: true; newRules: SuggestedRule[]; promotedComponents: number }
@@ -14,6 +15,10 @@ export async function approveScreenVersion(
   screenId: string,
   versionId: string,
 ): Promise<ApproveVersionResult> {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
+  await assertScreenAccess(screenId, user.id);
+  await assertVersionAccess(versionId, user.id);
   const version = await prisma.screenVersion.findFirst({
     where: { id: versionId, screenId, screen: { projectId } },
     select: {

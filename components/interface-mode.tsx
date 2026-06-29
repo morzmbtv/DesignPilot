@@ -2,19 +2,21 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { SlidersHorizontal, Sparkles } from "lucide-react";
+import { saveInterfaceMode } from "@/app/settings/profile/actions";
 
 type InterfaceMode = "simple" | "expert";
 const InterfaceModeContext = createContext<{ mode: InterfaceMode; setMode: (mode: InterfaceMode) => void }>({ mode: "simple", setMode: () => {} });
 
-export function InterfaceModeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setModeState] = useState<InterfaceMode>("simple");
+export function InterfaceModeProvider({ children, initialMode = "simple" }: { children: React.ReactNode; initialMode?: InterfaceMode }) {
+  const [mode, setModeState] = useState<InterfaceMode>(initialMode);
   useEffect(() => {
     const saved = window.localStorage.getItem("designpilot-interface-mode");
-    if (saved === "expert") setModeState("expert");
-  }, []);
+    if ((saved === "expert" || saved === "simple") && saved !== initialMode) setModeState(saved);
+  }, [initialMode]);
   function setMode(next: InterfaceMode) {
     setModeState(next);
     window.localStorage.setItem("designpilot-interface-mode", next);
+    saveInterfaceMode(next).catch(() => undefined);
   }
   return <InterfaceModeContext.Provider value={{ mode, setMode }}>{children}</InterfaceModeContext.Provider>;
 }

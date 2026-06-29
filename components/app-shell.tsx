@@ -3,8 +3,10 @@ import { Logo } from "./logo";
 import { AppNavigation } from "./app-navigation";
 import { InterfaceModeToggle } from "./interface-mode";
 import Link from "next/link";
+import { getCurrentUser } from "@/lib/security";
+import { LogoutButton } from "./logout-button";
 
-export function AppShell({
+export async function AppShell({
   children,
   projectId,
   projectName,
@@ -13,6 +15,7 @@ export function AppShell({
   projectId?: string;
   projectName?: string;
 }) {
+  const user = await getCurrentUser();
   return (
     <div className="min-h-screen bg-canvas">
       <div className="mx-auto flex min-h-screen max-w-[1720px]">
@@ -21,6 +24,21 @@ export function AppShell({
           <AppNavigation projectId={projectId} />
           <div className="mt-auto">
             <InterfaceModeToggle />
+            {user ? (
+              <div className="mt-4 rounded-2xl border border-line bg-white p-4">
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-muted">Аккаунт</p>
+                <Link href="/account" className="mt-3 block min-w-0">
+                  <span className="block truncate text-sm font-black text-ink">{user.name || "Пользователь"}</span>
+                  <span className="mt-0.5 block truncate text-xs text-muted">{user.email}</span>
+                </Link>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Link href="/settings/profile" className="rounded-xl bg-[#f6f6fa] px-3 py-2 text-center text-xs font-bold text-muted hover:text-violet">
+                    Профиль
+                  </Link>
+                  <LogoutButton />
+                </div>
+              </div>
+            ) : null}
             {projectName && projectId ? (
               <Link href={`/projects/${projectId}`} className="mt-4 block rounded-2xl border border-line bg-[#fafaff] p-4 hover:border-violet/30">
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-muted">Текущий проект</p>
@@ -43,7 +61,7 @@ export function AppShell({
         </aside>
         <div className="min-w-0 flex-1 bg-canvas">
           <header className="sticky top-0 z-30 flex h-16 items-center border-b border-line bg-white/95 px-5 backdrop-blur lg:hidden">
-            <Logo /><div className="ml-auto"><InterfaceModeToggle compact /></div>
+            <Logo /><div className="ml-auto flex items-center gap-3"><InterfaceModeToggle compact />{user ? <LogoutButton compact /> : null}</div>
           </header>
           <div className="sticky top-16 z-20 overflow-x-auto border-b border-line bg-white lg:hidden">
             <AppNavigation projectId={projectId} mobile />

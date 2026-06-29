@@ -14,6 +14,7 @@ import { ScreenActionBar } from "@/components/screen-action-bar";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { createScreenVersion, deleteScreen, updateScreen } from "@/app/actions";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -26,8 +27,9 @@ const dateFormatter = new Intl.DateTimeFormat("ru-RU", {
 });
 
 export default async function ScreenPage({ params }: { params: { id: string; screenId: string } }) {
+  const user = await requireUser();
   const screen = await prisma.screen.findFirst({
-    where: { id: params.screenId, projectId: params.id },
+    where: { id: params.screenId, projectId: params.id, project: { userId: user.id } },
     include: {
       project: { select: { name: true } },
       versions: {

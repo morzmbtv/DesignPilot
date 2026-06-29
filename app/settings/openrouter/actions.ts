@@ -2,12 +2,14 @@
 
 import { callOpenRouterTracked, completeAiPromptLog, OpenRouterError } from "@/lib/openrouter";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/security";
 
 export type OpenRouterTestResult =
   | { ok: true; text: string }
   | { ok: false; error: string };
 
 export async function testOpenRouter(model: string): Promise<OpenRouterTestResult> {
+  const user = await requireUser();
   const selectedModel = model.trim();
   if (!selectedModel) return { ok: false, error: "Укажите модель OpenRouter." };
 
@@ -22,7 +24,7 @@ export async function testOpenRouter(model: string): Promise<OpenRouterTestResul
           content: "Reply in Russian with one short sentence confirming that the OpenRouter connection works.",
         },
       ] as const;
-    const project = await prisma.project.findFirst({ orderBy: { updatedAt: "desc" }, select: { id: true } });
+    const project = await prisma.project.findFirst({ where: { userId: user.id }, orderBy: { updatedAt: "desc" }, select: { id: true } });
     if (!project) return { ok: false, error: "Сначала создайте проект: AI Prompt Log требует projectId." };
     const text = await callOpenRouterTracked([...messages], {
       model: selectedModel,

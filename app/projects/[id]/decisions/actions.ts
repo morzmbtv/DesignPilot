@@ -2,8 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { assertProjectAccess, requireUser } from "@/lib/security";
 
 export async function setDecisionStatus(projectId: string, decisionId: string, status: "approved" | "rejected") {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
   const result = await prisma.designDecision.updateMany({
     where: { id: decisionId, projectId },
     data: { status },
@@ -14,6 +17,8 @@ export async function setDecisionStatus(projectId: string, decisionId: string, s
 }
 
 export async function promoteDecisionToRule(projectId: string, decisionId: string) {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
   const decision = await prisma.designDecision.findFirst({ where: { id: decisionId, projectId } });
   if (!decision) return { ok: false as const, error: "Решение не найдено." };
   const value = decision.newValue || decision.reason;

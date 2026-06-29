@@ -6,14 +6,16 @@ import { ProjectTabs } from "@/components/project-tabs";
 import { createScreen } from "@/app/actions";
 import { prisma } from "@/lib/prisma";
 import { ScreenCreationWizard } from "@/components/screen-creation-wizard";
+import { requireUser } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
 const dateFormatter = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", year: "numeric" });
 
 export default async function ScreensPage({ params }: { params: { id: string } }) {
-  const project = await prisma.project.findUnique({
-    where: { id: params.id },
+  const user = await requireUser();
+  const project = await prisma.project.findFirst({
+    where: { id: params.id, userId: user.id },
     include: {
       screens: {
         include: {

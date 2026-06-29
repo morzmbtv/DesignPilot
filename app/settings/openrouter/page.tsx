@@ -2,10 +2,12 @@ import { ArrowLeft, Cable } from "lucide-react";
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { OpenRouterTestForm } from "@/components/openrouter-test-form";
+import { requireUser } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
-export default function OpenRouterSettingsPage() {
+export default async function OpenRouterSettingsPage() {
+  await requireUser();
   const defaultModel = process.env.OPENROUTER_MODEL?.trim() || "";
   const isKeyConfigured = Boolean(process.env.OPENROUTER_API_KEY?.trim());
 

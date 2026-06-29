@@ -4,12 +4,14 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { LibraryPanel } from "@/components/design-library/LibraryPanel";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
 export default async function DesignLibraryPage({ params }: { params: { id: string } }) {
-  const project = await prisma.project.findUnique({
-    where: { id: params.id },
+  const user = await requireUser();
+  const project = await prisma.project.findFirst({
+    where: { id: params.id, userId: user.id },
     include: {
       designComponents: { orderBy: { updatedAt: "desc" } },
       designTokens: { orderBy: [{ group: "asc" }, { name: "asc" }] },

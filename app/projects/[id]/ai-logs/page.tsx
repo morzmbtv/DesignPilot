@@ -5,12 +5,14 @@ import { AiPromptDebugger } from "@/components/ai-prompt-debugger";
 import { AppShell } from "@/components/app-shell";
 import { prisma } from "@/lib/prisma";
 import { ModeOnly } from "@/components/interface-mode";
+import { requireUser } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
 export default async function AiLogsPage({ params }: { params: { id: string } }) {
-  const project = await prisma.project.findUnique({
-    where: { id: params.id },
+  const user = await requireUser();
+  const project = await prisma.project.findFirst({
+    where: { id: params.id, userId: user.id },
     include: {
       aiPromptLogs: {
         include: {
