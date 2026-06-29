@@ -128,6 +128,32 @@ $env:INITIAL_ADMIN_EMAIL="you@example.com"; npm run db:assign-owner
 
 Если пользователь был создан скриптом без пароля, зарегистрируйтесь через `/register` с тем же email — аккаунт получит пароль и сохранит привязанные проекты.
 
+## Восстановление migration history для существующей production-базы
+
+Если таблицы DesignPilot уже были созданы вручную или через старую baseline migration, но Prisma не видит baseline как применённую, `npm run db:migrate` может упасть с ошибкой вида:
+
+```text
+ERROR: relation "Project" already exists
+```
+
+Это означает: данные в базе есть, но в `_prisma_migrations` нет записи о baseline. Базу удалять нельзя. Безопасный порядок:
+
+```bash
+npm run db:inspect
+npm run db:resolve-baseline
+npm run db:migrate
+npm run db:assign-owner
+```
+
+Что делает этот сценарий:
+
+- `db:inspect` показывает существующие таблицы, колонку `Project.userId` и записи `_prisma_migrations`;
+- `db:resolve-baseline` помечает `20260629150000_postgresql_baseline` как уже применённую без выполнения SQL baseline;
+- `db:migrate` применяет только следующие миграции, включая Auth.js таблицы;
+- `db:assign-owner` привязывает старые проекты без `userId` к пользователю из `INITIAL_ADMIN_EMAIL`.
+
+Перед запуском убедитесь, что `DATABASE_URL` указывает на production PostgreSQL, а не на SQLite/local файл.
+
 ## Локальная разработка
 
 ```bash

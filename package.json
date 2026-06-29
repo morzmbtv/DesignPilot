@@ -9,6 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "db:migrate": "prisma migrate deploy",
+    "db:resolve-baseline": "prisma migrate resolve --applied 20260629150000_postgresql_baseline",
+    "db:inspect": "tsx scripts/inspect-db.ts",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:assign-owner": "tsx scripts/assign-owner.ts"
