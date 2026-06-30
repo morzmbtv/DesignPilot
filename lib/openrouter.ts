@@ -37,10 +37,12 @@ type AiLogContext = {
 
 type OpenRouterResponse = {
   choices?: Array<{
+    finish_reason?: string;
     message?: {
       content?: string | Array<{ type?: string; text?: string }>;
     };
   }>;
+  usage?: Record<string, unknown>;
   error?: {
     message?: string;
     code?: string | number;
@@ -54,15 +56,19 @@ export class OpenRouterError extends Error {
   }
 }
 
-export async function callOpenRouter(
-  messages: OpenRouterMessage[],
-  options: {
-    model?: string;
-    responseFormat?: OpenRouterResponseFormat;
-    temperature?: number;
-    maxTokens?: number;
-  } = {},
-) {
+type OpenRouterOptions = {
+  model?: string;
+  responseFormat?: OpenRouterResponseFormat;
+  temperature?: number;
+  maxTokens?: number;
+};
+
+export async function callOpenRouter(messages: OpenRouterMessage[], options: OpenRouterOptions = {}) {
+  const result = await callOpenRouterDetailed(messages, options);
+  return result.text;
+}
+
+async function callOpenRouterDetailed(messages: OpenRouterMessage[], options: OpenRouterOptions = {}) {
   const apiKey = process.env.OPENROUTER_API_KEY?.trim();
   const model = options.model?.trim() || process.env.OPENROUTER_MODEL?.trim();
   const apiUrl = process.env.OPENROUTER_API_URL?.trim() || DEFAULT_OPENROUTER_URL;
@@ -81,7 +87,7 @@ export async function callOpenRouter(
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
         "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-        "X-OpenRouter-Title": "EDUS AI Design Prompt Builder",
+        "X-OpenRouter-Title": "DesignPilot",
       },
       body: JSON.stringify({
         model,
@@ -98,19 +104,17 @@ export async function callOpenRouter(
 
     if (!response.ok) {
       const detail = data?.error?.message?.trim();
-      throw new OpenRouterError(
-        detail ? `OpenRouter: ${detail}` : `OpenRouter вернул ошибку ${response.status}.`,
-        response.status,
-      );
+      throw new OpenRouterError(detail ? `OpenRouter: ${detail}` : `OpenRouter вернул ошибку ${response.status}.`, response.status);
     }
 
-    const content = data?.choices?.[0]?.message?.content;
+    const choice = data?.choices?.[0];
+    const content = choice?.message?.content;
     const text = typeof content === "string"
       ? content.trim()
       : content?.map((part) => part.text ?? "").join("").trim();
 
     if (!text) throw new OpenRouterError("OpenRouter вернул пустой ответ.");
-    return text;
+    return { text, finishReason: choice?.finish_reason ?? null, usage: data?.usage ?? null };
   } catch (error) {
     if (error instanceof OpenRouterError) throw error;
     if (error instanceof Error && error.name === "AbortError") {
@@ -124,15 +128,10 @@ export async function callOpenRouter(
 
 export async function callOpenRouterTracked(
   messages: OpenRouterMessage[],
-  options: {
-    model?: string;
-    responseFormat?: OpenRouterResponseFormat;
-    temperature?: number;
-    maxTokens?: number;
-    log: AiLogContext;
-  },
+  options: OpenRouterOptions & { log: AiLogContext },
 ) {
   const model = options.model?.trim() || process.env.OPENROUTER_MODEL?.trim() || "not-configured";
+  const provider = model.includes("/") ? model.split("/")[0] : "openrouter";
   const fullPrompt = JSON.stringify(messages, null, 2);
   const log = await prisma.aiPromptLog.create({
     data: {
@@ -141,6 +140,7 @@ export async function callOpenRouterTracked(
       screenVersionId: options.log.screenVersionId,
       action: options.log.action,
       model,
+      provider,
       requestPreview: options.log.requestPreview.slice(0, 500),
       fullPrompt,
     },
@@ -148,12 +148,16 @@ export async function callOpenRouterTracked(
   });
 
   try {
-    const text = await callOpenRouter(messages, options);
+    const result = await callOpenRouterDetailed(messages, options);
     await prisma.aiPromptLog.update({
       where: { id: log.id },
-      data: { rawResponse: text },
+      data: {
+        rawResponse: result.text,
+        finishReason: result.finishReason,
+        tokensJson: result.usage ? JSON.stringify(result.usage) : null,
+      },
     });
-    return { text, logId: log.id };
+    return { text: result.text, logId: log.id, finishReason: result.finishReason, usage: result.usage };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Неизвестная ошибка OpenRouter.";
     await prisma.aiPromptLog.update({
@@ -166,14 +170,14 @@ export async function callOpenRouterTracked(
 
 export async function completeAiPromptLog(
   logId: string,
-  data: { parsedResponse?: unknown; screenVersionId?: string; error?: string },
+  data: { parsedResponse?: unknown; screenVersionId?: string; error?: string | null },
 ) {
   await prisma.aiPromptLog.update({
     where: { id: logId },
     data: {
       ...(data.parsedResponse !== undefined ? { parsedResponse: JSON.stringify(data.parsedResponse) } : {}),
       ...(data.screenVersionId ? { screenVersionId: data.screenVersionId } : {}),
-      ...(data.error ? { error: data.error } : {}),
+      ...(data.error !== undefined ? { error: data.error } : {}),
     },
   });
 }

@@ -5,12 +5,15 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   generateScreenWithAI,
+  repairAiLogJson,
+  retryAiLogJson,
   type GenerateScreenResult,
 } from "@/app/projects/[id]/screens/[screenId]/ai-actions";
 import { AiContextViewer } from "@/components/ai-context-viewer";
 import { ModeOnly } from "@/components/interface-mode";
 
 type SuccessResult = Extract<GenerateScreenResult, { ok: true }>;
+type FailureResult = Extract<GenerateScreenResult, { ok: false }>;
 
 export function AiGeneratePanel({
   projectId,
@@ -26,6 +29,7 @@ export function AiGeneratePanel({
   const router = useRouter();
   const [request, setRequest] = useState(`Создай экран ${screenName} для ${projectName}`);
   const [result, setResult] = useState<SuccessResult | null>(null);
+  const [failure, setFailure] = useState<FailureResult | null>(null);
   const [error, setError] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -33,11 +37,13 @@ export function AiGeneratePanel({
   async function handleGenerate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setFailure(null);
     setCopied(false);
     setIsGenerating(true);
     try {
       const response = await generateScreenWithAI(projectId, screenId, request);
       if (!response.ok) {
+        setFailure(response);
         setError(response.error);
         return;
       }
@@ -58,6 +64,36 @@ export function AiGeneratePanel({
       window.setTimeout(() => setCopied(false), 2_000);
     } catch {
       setError("Не удалось скопировать промпт.");
+    }
+  }
+
+  async function fixJsonLocally() {
+    if (!failure?.logId) return;
+    setIsGenerating(true);
+    setError("");
+    try {
+      const response = await repairAiLogJson(projectId, screenId, failure.logId);
+      setError(response.ok ? "JSON восстановлен локально и сохранён в AI Log. Проверьте раздел AI Debug." : response.error);
+      router.refresh();
+    } catch {
+      setError("Не удалось локально восстановить JSON.");
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  async function retryJson() {
+    if (!failure?.logId) return;
+    setIsGenerating(true);
+    setError("");
+    try {
+      const response = await retryAiLogJson(projectId, screenId, failure.logId);
+      setError(response.ok ? "Повторный запрос выполнен, ответ сохранён в AI Log." : response.error);
+      router.refresh();
+    } catch {
+      setError("Не удалось повторить запрос.");
+    } finally {
+      setIsGenerating(false);
     }
   }
 
@@ -104,6 +140,30 @@ export function AiGeneratePanel({
           {error ? (
             <div role="alert" className="mt-4 flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
               <TriangleAlert size={17} className="mt-0.5 shrink-0" /> {error}
+            </div>
+          ) : null}
+          {failure?.recoverable ? (
+            <div className="mt-4 rounded-2xl border border-red-100 bg-white p-4">
+              <p className="text-sm font-black text-red-700">AI Debug</p>
+              <div className="mt-3 grid gap-2 text-sm text-ink sm:grid-cols-2">
+                <span><strong>Модель:</strong> {failure.model || "неизвестно"}</span>
+                <span><strong>Причина:</strong> {failure.parseError || failure.error}</span>
+              </div>
+              <div className="mt-3 grid gap-2 text-xs">
+                {failure.validation ? Object.entries(failure.validation).map(([key, values]) => (
+                  <div key={key} className={`rounded-xl px-3 py-2 ${values.length ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-700"}`}>
+                    <strong>{key}:</strong> {values.length ? values.join("; ") : "✓ прошло"}
+                  </div>
+                )) : null}
+              </div>
+              <details className="mt-3 rounded-xl bg-[#fafaff] p-3">
+                <summary className="cursor-pointer text-xs font-black uppercase tracking-[0.08em] text-muted">Raw Response</summary>
+                <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap text-xs leading-5 text-ink">{failure.rawResponse || "Raw response отсутствует."}</pre>
+              </details>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button type="button" onClick={fixJsonLocally} disabled={isGenerating} className="h-10 rounded-xl bg-ink px-4 text-sm font-bold text-white disabled:opacity-60">Исправить JSON</button>
+                <button type="button" onClick={retryJson} disabled={isGenerating} className="h-10 rounded-xl border border-line px-4 text-sm font-bold text-violet disabled:opacity-60">Повторить</button>
+              </div>
             </div>
           ) : null}
         </div>

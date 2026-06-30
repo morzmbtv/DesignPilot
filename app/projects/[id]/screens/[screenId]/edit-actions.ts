@@ -9,6 +9,7 @@ import { generateHtmlLayout } from "@/lib/design-code/html-layout-generator";
 import { generateFlutterWidgetTree } from "@/lib/design-code/flutter-tree-generator";
 import { validateLayoutJson, type LayoutElement, type LayoutJson } from "@/lib/layout";
 import { assertProjectAccess, assertScreenAccess, requireUser } from "@/lib/security";
+import { AiJsonRecoveryError, recoverJson, throwJsonRecoveryError } from "@/lib/ai/json-recovery";
 
 export type SuggestedRule = {
   category: string;
@@ -29,7 +30,7 @@ export type EditScreenVersionResult =
       diff: string;
       decisions: DecisionInput[];
     }
-  | { ok: false; error: string };
+  | { ok: false; error: string; recoverable?: boolean; logId?: string; model?: string; rawResponse?: string; parseError?: string; validation?: Record<string, string[]> };
 
 const responseFormat: OpenRouterResponseFormat = {
   type: "json_schema",
@@ -263,8 +264,31 @@ export async function editCurrentScreenVersion(
       ...edited,
     };
   } catch (error) {
-    if (logId && error instanceof Error && (error.message === "INVALID_AI_JSON" || error.message.startsWith("INVALID_LAYOUT_JSON"))) {
-      await completeAiPromptLog(logId, { parsedResponse: { validationErrors: error.message.split(":").slice(1), selectedElementId: selectedElementId || null }, error: error.message });
+    if (logId && error instanceof AiJsonRecoveryError) {
+      const log = await prisma.aiPromptLog.findUnique({ where: { id: logId }, select: { model: true, rawResponse: true } });
+      await completeAiPromptLog(logId, {
+        parsedResponse: {
+          aiRecovery: {
+            stages: error.details.stages,
+            warnings: error.details.warnings,
+            jsonText: error.details.jsonText,
+            repairedText: error.details.repairedText,
+          },
+          validationErrors: error.details.validationErrors ?? [],
+          selectedElementId: selectedElementId || null,
+        },
+        error: error.message,
+      });
+      return {
+        ok: false,
+        error: "AI вернул ответ, который не удалось автоматически применить к текущей версии.",
+        recoverable: true,
+        logId,
+        model: log?.model,
+        rawResponse: log?.rawResponse ?? error.details.rawResponse,
+        parseError: error.message,
+        validation: { layout: error.details.validationErrors ?? [error.message] },
+      };
     }
     if (error instanceof OpenRouterError) return { ok: false, error: error.message };
     if (error instanceof Error && error.message === "INVALID_AI_JSON") {
@@ -288,6 +312,78 @@ export async function checkLockedEditIntent(projectId: string, screenId: string,
   const parsed = validateLayoutJson(JSON.parse(latest.layoutJson));
   const elements = parsed.layout?.elements.filter((element) => element.locked).map((element) => element.label || element.id) ?? [];
   return { requiresConfirmation: elements.length > 0, elements };
+}
+
+export async function repairEditAiLogJson(projectId: string, screenId: string, logId: string) {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
+  await assertScreenAccess(screenId, user.id);
+  const log = await prisma.aiPromptLog.findFirst({
+    where: { id: logId, projectId, screenId },
+    select: { rawResponse: true },
+  });
+  if (!log?.rawResponse) return { ok: false as const, error: "RAW ответ отсутствует в AI Log." };
+
+  const recovered = recoverJson(log.rawResponse);
+  if (!recovered.ok) {
+    await completeAiPromptLog(logId, {
+      parsedResponse: { aiRecovery: recovered, validationErrors: [recovered.error] },
+      error: recovered.error,
+    });
+    return { ok: false as const, error: recovered.error, rawResponse: log.rawResponse };
+  }
+
+  await completeAiPromptLog(logId, {
+    parsedResponse: {
+      parsedJson: recovered.value,
+      aiRecovery: { stages: recovered.stages, warnings: recovered.warnings, repaired: recovered.repairedText !== recovered.jsonText },
+    },
+    error: null,
+  });
+  return { ok: true as const, parsedJson: recovered.value, repairedText: recovered.repairedText };
+}
+
+export async function retryEditAiLogJson(projectId: string, screenId: string, logId: string) {
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
+  await assertScreenAccess(screenId, user.id);
+  const log = await prisma.aiPromptLog.findFirst({
+    where: { id: logId, projectId, screenId },
+    select: { fullPrompt: true, rawResponse: true, requestPreview: true },
+  });
+  if (!log) return { ok: false as const, error: "AI Log не найден." };
+
+  const messages = [
+    ...parseMessages(log.fullPrompt),
+    {
+      role: "user" as const,
+      content: `Предыдущий ответ модели был невалидным или не прошёл проверку.\n\nRAW RESPONSE:\n${log.rawResponse || "(empty)"}\n\nИсправь предыдущий JSON. Верни только валидный JSON без markdown, без пояснений и без текста вокруг JSON.`,
+    },
+  ];
+
+  try {
+    const tracked = await callOpenRouterTracked(messages, {
+      responseFormat,
+      temperature: 0,
+      maxTokens: 6_000,
+      log: { projectId, screenId, action: "edit_screen", requestPreview: `Retry JSON repair: ${log.requestPreview}` },
+    });
+    const recovered = recoverJson(tracked.text);
+    if (!recovered.ok) {
+      await completeAiPromptLog(tracked.logId, { parsedResponse: { aiRecovery: recovered }, error: recovered.error });
+      return { ok: false as const, error: recovered.error, logId: tracked.logId, rawResponse: tracked.text };
+    }
+    await completeAiPromptLog(tracked.logId, {
+      parsedResponse: {
+        parsedJson: recovered.value,
+        aiRecovery: { stages: recovered.stages, warnings: recovered.warnings, repaired: recovered.repairedText !== recovered.jsonText },
+      },
+      error: null,
+    });
+    return { ok: true as const, logId: tracked.logId, parsedJson: recovered.value, rawResponse: tracked.text };
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : "Не удалось повторить запрос." };
+  }
 }
 
 function detectsLockedEdit(request: string) {
@@ -336,50 +432,64 @@ export async function saveSuggestedProjectRule(
 }
 
 function parseEditedScreen(raw: string) {
-  try {
-    const withoutFence = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-    const start = withoutFence.indexOf("{");
-    const end = withoutFence.lastIndexOf("}");
-    const parsed = JSON.parse(start >= 0 && end >= start ? withoutFence.slice(start, end + 1) : withoutFence) as unknown;
-    if (!isRecord(parsed)) throw new Error("INVALID_AI_JSON");
+  const recovery = recoverJson(raw);
+  if (!recovery.ok) throwJsonRecoveryError(raw, recovery);
+  const parsed = recovery.value;
+  if (!isRecord(parsed)) throwJsonRecoveryError(raw, recovery, ["Ответ должен быть JSON-объектом."]);
 
-    const updatedDesignSpec = requiredString(parsed.updatedDesignSpec);
-    const updatedImagePrompt = requiredString(parsed.updatedImagePrompt);
-    const layoutResult = validateLayoutJson(parsed.updatedLayoutJson);
-    if (!layoutResult.valid || !layoutResult.layout) throw new Error(`INVALID_LAYOUT_JSON:${layoutResult.errors.join("|")}`);
-    const changeSummary = requiredString(parsed.changeSummary);
-    const diff = requiredString(parsed.diff);
-    if (!Array.isArray(parsed.rulesToAddOrUpdate)) throw new Error("INVALID_AI_JSON");
-    const rulesToAddOrUpdate = parsed.rulesToAddOrUpdate.map((rule) => {
-      if (!isRecord(rule)) throw new Error("INVALID_AI_JSON");
-      return {
-        category: requiredString(rule.category),
-        name: requiredString(rule.name),
-        value: requiredString(rule.value),
-        source: requiredString(rule.source),
-      };
-    });
-    const decisions = parseDecisions(parsed.decisions);
+  const updatedDesignSpec = stringField(parsed.updatedDesignSpec);
+  const updatedImagePrompt = stringField(parsed.updatedImagePrompt);
+  const layoutResult = validateLayoutJson(parsed.updatedLayoutJson);
+  const errors = [
+    ...(!updatedDesignSpec ? ["Поле updatedDesignSpec отсутствует или пустое."] : []),
+    ...(!updatedImagePrompt ? ["Поле updatedImagePrompt отсутствует или пустое."] : []),
+    ...(!layoutResult.valid || !layoutResult.layout ? layoutResult.errors.map((item) => `updatedLayoutJson: ${item}`) : []),
+  ];
+  if (errors.length) throwJsonRecoveryError(raw, recovery, errors);
 
+  const rulesToAddOrUpdate = Array.isArray(parsed.rulesToAddOrUpdate) ? parsed.rulesToAddOrUpdate.flatMap((rule) => {
+    if (!isRecord(rule)) return [];
+    const name = stringField(rule.name);
+    const value = stringField(rule.value);
+    if (!name || !value) return [];
     return {
-      updatedDesignSpec,
-      updatedImagePrompt,
-      updatedLayoutJson: layoutResult.layout,
-      rulesToAddOrUpdate,
-      changeSummary,
-      diff,
-      decisions,
+      category: stringField(rule.category) || "Общее",
+      name,
+      value,
+      source: stringField(rule.source) || "ai",
     };
-  } catch {
-    throw new Error("INVALID_AI_JSON");
-  }
+  }) : [];
+  const decisions = parseDecisions(parsed.decisions);
+
+  return {
+    updatedDesignSpec,
+    updatedImagePrompt,
+    updatedLayoutJson: layoutResult.layout!,
+    rulesToAddOrUpdate,
+    changeSummary: stringField(parsed.changeSummary) || "AI edit",
+    diff: stringField(parsed.diff) || "Изменения применены.",
+    decisions,
+    aiRecovery: { stages: recovery.stages, warnings: recovery.warnings, repaired: recovery.repairedText !== recovery.jsonText },
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function requiredString(value: unknown) {
-  if (typeof value !== "string" || !value.trim()) throw new Error("INVALID_AI_JSON");
-  return value.trim();
+function stringField(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function parseMessages(value: string): Array<{ role: "system" | "user" | "assistant"; content: string }> {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((item) => {
+      if (!isRecord(item) || !["system", "user", "assistant"].includes(String(item.role)) || typeof item.content !== "string") return [];
+      return [{ role: item.role as "system" | "user" | "assistant", content: item.content }];
+    });
+  } catch {
+    return [];
+  }
 }

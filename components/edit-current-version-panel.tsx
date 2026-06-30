@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import {
   editCurrentScreenVersion,
   checkLockedEditIntent,
+  repairEditAiLogJson,
+  retryEditAiLogJson,
   saveSuggestedProjectRule,
   type EditScreenVersionResult,
   type SuggestedRule,
@@ -14,6 +16,7 @@ import { AiContextViewer } from "@/components/ai-context-viewer";
 import { ModeOnly } from "@/components/interface-mode";
 
 type SuccessResult = Extract<EditScreenVersionResult, { ok: true }>;
+type FailureResult = Extract<EditScreenVersionResult, { ok: false }>;
 
 export function EditCurrentVersionPanel({
   projectId,
@@ -31,11 +34,13 @@ export function EditCurrentVersionPanel({
   const [isEditing, setIsEditing] = useState(false);
   const [savingRule, setSavingRule] = useState<string | null>(null);
   const [savedRules, setSavedRules] = useState<string[]>([]);
+  const [failure, setFailure] = useState<FailureResult | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
     setSavedRules([]);
+    setFailure(null);
     try {
       const lockCheck = await checkLockedEditIntent(projectId, screenId, request);
       const unlockConfirmed = lockCheck.requiresConfirmation
@@ -46,6 +51,7 @@ export function EditCurrentVersionPanel({
       const response = await editCurrentScreenVersion(projectId, screenId, request, undefined, unlockConfirmed);
       if (!response.ok) {
         setError(response.error);
+        if (response.recoverable) setFailure(response);
         return;
       }
       setResult(response);
@@ -56,6 +62,30 @@ export function EditCurrentVersionPanel({
     } finally {
       setIsEditing(false);
     }
+  }
+
+  async function fixJsonLocally() {
+    if (!failure?.logId) return;
+    setError("");
+    const response = await repairEditAiLogJson(projectId, screenId, failure.logId);
+    if (!response.ok) {
+      setError(response.error);
+      return;
+    }
+    setError("JSON восстановлен локально и сохранён в AI Log. Откройте журнал AI Debug, чтобы проверить результат.");
+    router.refresh();
+  }
+
+  async function retryJson() {
+    if (!failure?.logId) return;
+    setError("");
+    const response = await retryEditAiLogJson(projectId, screenId, failure.logId);
+    if (!response.ok) {
+      setError(response.error);
+      return;
+    }
+    setError("Повторный ответ получен и сохранён в AI Log. Проверьте результат в AI Debug.");
+    router.refresh();
   }
 
   async function saveRule(rule: SuggestedRule, key: string) {
@@ -126,6 +156,34 @@ export function EditCurrentVersionPanel({
           {error ? (
             <div role="alert" className="mt-4 flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
               <TriangleAlert size={17} className="mt-0.5 shrink-0" /> {error}
+            </div>
+          ) : null}
+
+          {failure?.recoverable ? (
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <p className="font-black">AI Debug: ответ модели сохранён, но JSON требует проверки</p>
+              <p className="mt-1">Модель: {failure.model || "неизвестно"}</p>
+              <p className="mt-1">Причина: {failure.parseError || failure.error}</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {Object.entries(failure.validation ?? {}).map(([key, errors]) => (
+                  <div key={key} className={`rounded-xl px-3 py-2 ${errors.length ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>
+                    <span className="font-bold">{errors.length ? "!" : "✓"} {key}</span>
+                    <p className="mt-1 text-xs">{errors.length ? errors.join("; ") : "проверка пройдена"}</p>
+                  </div>
+                ))}
+              </div>
+              <details className="mt-3">
+                <summary className="cursor-pointer font-bold">Показать RAW ответ</summary>
+                <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-xl bg-white p-3 font-mono text-xs">{failure.rawResponse || "RAW ответ отсутствует"}</pre>
+              </details>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={fixJsonLocally} className="rounded-xl bg-ink px-4 py-2 text-xs font-bold text-white">
+                  Исправить JSON
+                </button>
+                <button type="button" onClick={retryJson} className="rounded-xl border border-amber-300 bg-white px-4 py-2 text-xs font-bold text-amber-900">
+                  Повторить
+                </button>
+              </div>
             </div>
           ) : null}
         </div>

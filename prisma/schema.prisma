@@ -347,10 +347,13 @@ model AiPromptLog {
   screenVersionId String?
   action          String
   model           String
+  provider        String   @default("openrouter")
   requestPreview  String
   fullPrompt      String
   rawResponse     String?
   parsedResponse  String?
+  finishReason    String?
+  tokensJson      String?
   error           String?
   createdAt       DateTime @default(now())
   project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
