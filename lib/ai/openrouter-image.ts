@@ -14,6 +14,7 @@ type GenerateOptions = {
   aspectRatio?: string;
   outputFormat?: "png" | "jpeg" | "webp";
   logAction?: "generate_asset" | "test_image_generation";
+  screenId?: string;
 };
 
 type ImageResponse = {
@@ -24,7 +25,11 @@ type ImageResponse = {
 };
 
 export class OpenRouterImageError extends Error {
-  constructor(message: string, public readonly attempts: string[] = []) {
+  constructor(
+    message: string,
+    public readonly attempts: string[] = [],
+    public readonly rawResponse?: string,
+  ) {
     super(message);
     this.name = "OpenRouterImageError";
   }
@@ -40,8 +45,22 @@ export async function generateImageAsset(
   await assertProjectAccess(projectId, user.id);
   const apiKey = process.env.OPENROUTER_API_KEY?.trim();
   const primaryModel = process.env.OPENROUTER_IMAGE_MODEL?.trim();
-  if (!apiKey) throw new OpenRouterImageError("OPENROUTER_API_KEY не настроен.");
-  if (!primaryModel) throw new OpenRouterImageError("Image model не настроена.");
+  if (!apiKey || !primaryModel) {
+    const message = !apiKey ? "OPENROUTER_API_KEY не настроен." : "Image model не настроена.";
+    await prisma.aiPromptLog.create({
+      data: {
+        projectId,
+        screenId: options.screenId,
+        action: options.logAction || "generate_asset",
+        model: primaryModel || "not-configured",
+        provider: "openrouter",
+        requestPreview: prompt.slice(0, 500),
+        fullPrompt: prompt,
+        error: message,
+      },
+    });
+    throw new OpenRouterImageError(message);
+  }
 
   const project = await prisma.project.findFirst({
     where: { id: projectId, userId: user.id },
@@ -66,6 +85,7 @@ export async function generateImageAsset(
     const log = await prisma.aiPromptLog.create({
       data: {
         projectId,
+        screenId: options.screenId,
         action: options.logAction || "generate_asset",
         model,
         provider,
@@ -127,7 +147,13 @@ export async function generateImageAsset(
     } catch (error) {
       const message = error instanceof Error ? error.message : "Неизвестная ошибка генерации.";
       errors.push(`${model}: ${message}`);
-      await prisma.aiPromptLog.update({ where: { id: log.id }, data: { error: message } });
+      await prisma.aiPromptLog.update({
+        where: { id: log.id },
+        data: {
+          error: message,
+          ...(error instanceof OpenRouterImageError && error.rawResponse ? { rawResponse: error.rawResponse } : {}),
+        },
+      });
     }
   }
 
@@ -198,7 +224,11 @@ async function requestImage(input: {
       signal: controller.signal,
     });
     const data = (await response.json().catch(() => null)) as ImageResponse | null;
-    if (!response.ok) throw new OpenRouterImageError(data?.error?.message || `OpenRouter Image вернул ошибку ${response.status}.`);
+    if (!response.ok) throw new OpenRouterImageError(
+      data?.error?.message || `OpenRouter Image вернул ошибку ${response.status}.`,
+      [],
+      data ? JSON.stringify(data) : undefined,
+    );
     if (!data) throw new OpenRouterImageError("OpenRouter Image вернул пустой ответ.");
     return data;
   } catch (error) {

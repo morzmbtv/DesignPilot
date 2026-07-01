@@ -129,7 +129,7 @@ export function AiGeneratePanel({
                 className="inline-flex h-11 items-center gap-2 rounded-xl bg-violet px-5 text-sm font-bold text-white shadow-soft disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isGenerating ? <Loader2 size={17} className="animate-spin" /> : <Sparkles size={17} />}
-                {isGenerating ? "Генерируем…" : "Сгенерировать"}
+                {isGenerating ? "Создаём экран и изображения…" : "Сгенерировать"}
               </button>
               <ModeOnly mode="expert"><AiContextViewer projectId={projectId} screenId={screenId} /></ModeOnly>
               <span className="text-xs leading-5 text-muted">
@@ -195,6 +195,17 @@ export function AiGeneratePanel({
               {copied ? "Скопировано" : "Копировать промпт"}
             </button>
           </div>
+
+          {result.warnings.length ? (
+            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <p className="flex items-center gap-2 font-black"><TriangleAlert size={16} /> Экран создан с предупреждениями</p>
+              {result.warnings.map((warning) => <p key={warning} className="mt-1">{warning}</p>)}
+            </div>
+          ) : result.generatedAssetIds.length ? (
+            <p className="mt-5 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+              Создано изображений: {result.generatedAssetIds.length}. Они сохранены в библиотеке ассетов и привязаны к Canvas.
+            </p>
+          ) : null}
 
           <div className="mt-6 grid gap-5 lg:grid-cols-2">
             <ModeOnly mode="expert"><ResultBlock title="Спецификация дизайна" value={result.designSpec} /></ModeOnly>

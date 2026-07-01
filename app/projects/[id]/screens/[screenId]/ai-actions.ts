@@ -12,6 +12,7 @@ import { assertProjectAccess, assertScreenAccess, requireUser } from "@/lib/secu
 import { AiJsonRecoveryError, recoverJson, throwJsonRecoveryError } from "@/lib/ai/json-recovery";
 import { compileDesignModel, DesignCompilerError } from "@/lib/idm/design-compiler";
 import { applyPrimaryLogoPolicy, sanitizeAssetReferences } from "@/lib/idm/primary-logo";
+import { hydrateVisualAssets } from "@/lib/ai/hydrate-visual-assets";
 
 export type GeneratedRule = {
   category: string;
@@ -63,6 +64,8 @@ export type GenerateScreenResult =
       decisions: DecisionInput[];
       componentSuggestions: ComponentCandidate[];
       changeSummary: string;
+      warnings: string[];
+      generatedAssetIds: string[];
     }
   | {
       ok: false;
@@ -202,13 +205,30 @@ export async function generateScreenWithAI(
     logId = tracked.logId;
 
     const codeRules = project.rules.map(({ category, name, value }) => ({ category, name, value }));
-    const generated = parseGeneratedScreen(
+    const parsedGenerated = parseGeneratedScreen(
       tracked.text,
       codeRules,
       project.projectAssets.find((asset) => asset.isPrimaryLogo) ?? null,
       project.projectAssets.map((asset) => asset.id),
       /splash|логотип|logo/i.test(`${screen.name} ${screen.purpose} ${request}`),
     );
+    const hydration = await hydrateVisualAssets(projectId, screenId, parsedGenerated.internalDesignModel);
+    const hydratedCompiled = compileDesignModel(hydration.idm, codeRules);
+    const generated = {
+      ...parsedGenerated,
+      designSpec: hydratedCompiled.designSpec,
+      imagePrompt: hydratedCompiled.imagePrompt,
+      layoutJson: hydratedCompiled.layoutJson,
+      htmlLayout: hydratedCompiled.htmlLayout,
+      flutterWidgetTree: hydratedCompiled.flutterWidgetTree,
+      animationSpec: hydratedCompiled.animationSpec,
+      exportJson: hydratedCompiled.exportJson,
+      internalDesignModel: hydratedCompiled.idm,
+      idmValidation: hydratedCompiled.validation,
+      componentSuggestions: hydratedCompiled.componentSuggestions,
+      warnings: hydration.warnings,
+      generatedAssetIds: hydration.generatedAssetIds,
+    };
     const usedAssetIds = Array.from(new Set(generated.internalDesignModel.hierarchy.elements.flatMap((element) => element.content.assetRef ? [element.content.assetRef] : [])));
     const version = await prisma.$transaction(async (tx) => {
       const latest = await tx.screenVersion.findFirst({
@@ -254,6 +274,7 @@ export async function generateScreenWithAI(
 
     revalidatePath(`/projects/${projectId}/screens`);
     revalidatePath(`/projects/${projectId}/screens/${screenId}`);
+    revalidatePath(`/projects/${projectId}/assets`);
 
     return {
       ok: true,
