@@ -1,6 +1,6 @@
 "use client";
 
-import { FileClock, FolderOpen, Library, MonitorSmartphone, Scale, Settings, ShieldCheck } from "lucide-react";
+import { FileClock, FolderOpen, Images, Library, MonitorSmartphone, Scale, Settings, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -26,6 +26,13 @@ export function AppNavigation({
 
   const items = [
     { href: "/", label: "Проекты", icon: FolderOpen, active: pathname === "/" || pathname === "/projects/new" },
+    {
+      href: projectId ? `/projects/${projectId}/assets` : "/",
+      label: "Ассеты",
+      icon: Images,
+      disabled: !projectId,
+      active: Boolean(projectId && pathname.includes(`/projects/${projectId}/assets`)),
+    },
     {
       href: projectId ? `/projects/${projectId}/screens` : "/",
       label: "Экраны",

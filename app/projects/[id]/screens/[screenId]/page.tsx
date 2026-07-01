@@ -8,13 +8,15 @@ import { VersionApproval } from "@/components/version-approval";
 import { LatestVersionCard } from "@/components/latest-version-card";
 import { VersionCopyActions } from "@/components/version-copy-actions";
 import { AiPromptDebugger } from "@/components/ai-prompt-debugger";
-import { LayoutEditor } from "@/components/wireframe/LayoutEditor";
+import { DesignCanvasEditor } from "@/components/canvas/DesignCanvasEditor";
 import { ModeOnly } from "@/components/interface-mode";
 import { ScreenActionBar } from "@/components/screen-action-bar";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { createScreenVersion, deleteScreen, updateScreen } from "@/app/actions";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/security";
+import { createIdmFromLegacy } from "@/lib/idm/legacy-converter";
+import type { InternalDesignModel } from "@/lib/idm/types";
 
 export const dynamic = "force-dynamic";
 
@@ -31,10 +33,20 @@ export default async function ScreenPage({ params }: { params: { id: string; scr
   const screen = await prisma.screen.findFirst({
     where: { id: params.screenId, projectId: params.id, project: { userId: user.id } },
     include: {
-      project: { select: { name: true } },
+      project: {
+        select: {
+          name: true,
+          platform: true,
+          rules: { select: { category: true, name: true, value: true } },
+          projectAssets: {
+            orderBy: [{ isPrimaryLogo: "desc" }, { createdAt: "desc" }],
+            select: { id: true, name: true, type: true, dataUrl: true, fileUrl: true, fileName: true, isPrimaryLogo: true },
+          },
+        },
+      },
       versions: {
         orderBy: { versionNumber: "desc" },
-        include: { aiPromptLogs: { orderBy: { createdAt: "desc" }, take: 1 }, styleSimilarityReport: true },
+        include: { aiPromptLogs: { orderBy: { createdAt: "desc" }, take: 1 }, styleSimilarityReport: true, internalDesignModel: true },
       },
       summaries: { orderBy: { updatedAt: "desc" }, take: 1 },
     },
@@ -110,19 +122,14 @@ export default async function ScreenPage({ params }: { params: { id: string; scr
         </section>
       ) : null}</ModeOnly>
       <div id="scheme" className="scroll-mt-24">{screen.versions[0] ? (
-        <LayoutEditor
+        <DesignCanvasEditor
           projectId={params.id}
           screenId={screen.id}
-          screenName={screen.name}
-          version={{
-            id: screen.versions[0].id,
-            versionNumber: screen.versions[0].versionNumber,
-            layoutJson: screen.versions[0].layoutJson,
-            designSpec: screen.versions[0].designSpec,
-            imagePrompt: screen.versions[0].imagePrompt,
-            htmlLayout: screen.versions[0].htmlLayout,
-            flutterWidgetTree: screen.versions[0].flutterWidgetTree,
-          }}
+          versionId={screen.versions[0].id}
+          versionNumber={screen.versions[0].versionNumber}
+          initialIdm={readScreenIdm(screen.versions[0], screen)}
+          projectRules={screen.project.rules}
+          assets={screen.project.projectAssets}
         />
       ) : <section className="mt-8 rounded-[22px] border border-dashed border-line bg-white p-10 text-center"><h2 className="text-xl font-black">Схема пока не создана</h2><p className="mt-2 text-sm text-muted">Нажмите «Сгенерировать», чтобы получить первый вариант.</p><a href="#generate" className="mt-5 inline-flex h-11 items-center rounded-xl bg-violet px-5 text-sm font-bold text-white">Сгенерировать</a></section>}</div>
 
@@ -197,6 +204,34 @@ export default async function ScreenPage({ params }: { params: { id: string; scr
       <ModeOnly mode="expert"><details id="additional" className="mt-8 scroll-mt-24 rounded-2xl border border-red-100 bg-white p-5"><summary className="cursor-pointer text-sm font-bold text-red-600">Дополнительно</summary><form action={remove} className="mt-4"><ConfirmSubmitButton message={`Удалить экран «${screen.name}»? Это действие нельзя отменить.`} className="inline-flex h-10 items-center gap-2 rounded-xl border border-red-200 px-4 text-sm font-bold text-red-600"><Trash2 size={16} /> Удалить экран</ConfirmSubmitButton></form></details></ModeOnly>
     </AppShell>
   );
+}
+
+function readScreenIdm(
+  version: {
+    versionNumber: number;
+    layoutJson: string | null;
+    userRequest: string;
+    changeSummary: string;
+    internalDesignModel: { normalizedJson: string | null; modelJson: string } | null;
+  },
+  screen: { name: string; project: { name: string; platform: string } },
+): InternalDesignModel {
+  try {
+    if (version.internalDesignModel?.normalizedJson) return JSON.parse(version.internalDesignModel.normalizedJson) as InternalDesignModel;
+    if (version.internalDesignModel?.modelJson) return JSON.parse(version.internalDesignModel.modelJson) as InternalDesignModel;
+  } catch {
+    // Старые или повреждённые версии безопасно открываются через legacy-конвертацию.
+  }
+  return createIdmFromLegacy({
+    projectName: screen.project.name,
+    screenName: screen.name,
+    platform: screen.project.platform,
+    versionNumber: version.versionNumber,
+    layoutJson: version.layoutJson,
+    userRequest: version.userRequest,
+    changeSummary: version.changeSummary,
+    source: "legacy_migration",
+  });
 }
 
 function SummaryField({ label, value }: { label: string; value: string }) {

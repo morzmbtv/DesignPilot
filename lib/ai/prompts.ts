@@ -22,6 +22,9 @@ export type ScreenEditPromptContext = {
   projectRules: Array<{ category: string; name: string; value: string; source: string }>;
   screen: { name: string; purpose: string };
   latestVersion: VersionSummary & { userRequest: string; diff: string };
+  assets: {
+    primaryLogo: { id: string; name: string } | null;
+  };
 };
 
 export type ScreenGenerationPromptContext = {
@@ -54,6 +57,9 @@ export type ScreenGenerationPromptContext = {
     source: string;
     approvedComponents: Array<{ id: string; name: string; category: string; description: string; layoutJson: string | null; states: string | null; variants: string | null }>;
     tokens: Array<{ group: string; name: string; value: string }>;
+  };
+  assets: {
+    primaryLogo: { id: string; name: string } | null;
   };
 };
 
@@ -116,6 +122,9 @@ IDM — единственный источник истины. Он долже�
 - Если пользователь просит “сверху”, y примерно 44–120.
 - Если пользователь просит “по центру”, центрируй по x/y.
 - locked=true защищает элемент от AI-изменений; не меняй locked элементы без явной просьбы.
+- Для image/illustration/icon можно использовать content.assetRef и content.assetRole.
+- Если в context.assets.primaryLogo есть логотип, используй только его id как content.assetRef и ставь content.assetRole="primaryLogo".
+- Не рисуй, не заменяй и не придумывай логотип проекта. Для логотипа допустим только предоставленный primaryLogo assetRef.
 
 Компоненты:
 - Сначала используй approved components из designLibrary через componentRef.

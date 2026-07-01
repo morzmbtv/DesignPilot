@@ -21,7 +21,14 @@ ${children}
 }
 
 function renderPositioned(element: LayoutElement) {
-  const widget = renderWidget(element).replaceAll("\n", "\n  ");
+  const rendered = renderWidget(element);
+  const rotated = element.rotation
+    ? `Transform.rotate(
+  angle: ${element.rotation} * 3.1415926535 / 180,
+  child: ${rendered.replaceAll("\n", "\n  ")},
+)`
+    : rendered;
+  const widget = rotated.replaceAll("\n", "\n  ");
   return `Positioned(
   left: ${element.x},
   top: ${element.y},
@@ -33,6 +40,13 @@ function renderPositioned(element: LayoutElement) {
 
 function renderWidget(element: LayoutElement) {
   const label = escapeDart(element.label || element.id);
+  if (element.assetRef && ["image", "illustration", "icon"].includes(element.type)) {
+    return `Image(
+  image: const AssetImage('asset://${escapeDart(element.assetRef)}'),
+  fit: BoxFit.contain,
+  semanticLabel: '${label}',
+)`;
+  }
   switch (element.type) {
     case "text":
       return `Text(

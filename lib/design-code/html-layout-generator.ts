@@ -36,6 +36,10 @@ function renderElement(element: LayoutElement) {
     ["id", element.id], ["x", element.x], ["y", element.y], ["width", element.width], ["height", element.height],
     ["align", element.align], ["style", element.style], ["radius", element.radius], ["background", element.background],
     ["opacity", element.opacity], ["zIndex", element.zIndex], ["locked", element.locked ? true : undefined],
+    ["rotation", element.rotation], ["color", element.color], ["font", element.fontFamily],
+    ["fontSize", element.fontSize], ["fontWeight", element.fontWeight],
+    ["componentRef", element.componentRef], ["assetRef", element.assetRef],
+    ["assetRole", element.assetRole], ["src", element.assetRef ? `asset://${element.assetRef}` : undefined],
   ];
   const attributeLines = attributes
     .filter(([, value]) => value !== undefined && value !== "")

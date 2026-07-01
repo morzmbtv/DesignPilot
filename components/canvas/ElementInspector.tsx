@@ -1,0 +1,95 @@
+"use client";
+
+import { Download, ExternalLink, Lock, Unlock } from "lucide-react";
+import Link from "next/link";
+import { layoutElementTypes } from "@/lib/layout";
+import type { IdmElement } from "@/lib/idm/types";
+import { readEditorProperties, writeEditorProperties } from "@/lib/idm/editor-properties";
+
+type AssetOption = { id: string; name: string; type: string; dataUrl: string | null; fileUrl: string | null; fileName: string | null; isPrimaryLogo: boolean };
+
+export function ElementInspector({ element, onChange, assets, projectId }: { element: IdmElement | null; onChange: (element: IdmElement) => void; assets: AssetOption[]; projectId: string }) {
+  if (!element) return <aside className="border-l border-slate-200 bg-white p-5"><h3 className="font-black">Инспектор</h3><p className="mt-3 text-sm leading-6 text-slate-500">Выберите элемент на холсте или в панели слоёв.</p></aside>;
+  const locked = Boolean(element.layout.locked);
+  const editor = readEditorProperties(element);
+  const patch = (value: Partial<IdmElement>) => onChange({ ...element, ...value });
+  const patchLayout = (value: Partial<IdmElement["layout"]>) => patch({ layout: { ...element.layout, ...value } });
+  const patchStyle = (value: Partial<IdmElement["style"]>) => patch({ style: { ...element.style, ...value } });
+  const patchContent = (value: Partial<IdmElement["content"]>) => patch({ content: { ...element.content, ...value } });
+  const patchComponent = (value: string) => patch({ componentRef: value ? { componentId: value, name: value, source: "approved_library" } : null });
+  const patchEditor = (value: Parameters<typeof writeEditorProperties>[1]) => onChange(writeEditorProperties(element, value));
+  const selectedAsset = element.content.assetRef ? assets.find((asset) => asset.id === element.content.assetRef) : null;
+
+  return (
+    <aside className="border-l border-slate-200 bg-white">
+      <div className="border-b border-slate-200 px-5 py-3">
+        <p className="text-xs font-black uppercase tracking-[0.1em] text-slate-500">Инспектор</p>
+        <p className="mt-1 truncate text-sm font-black">{element.name}</p>
+      </div>
+      <div className="max-h-[710px] space-y-5 overflow-y-auto p-4">
+        {locked ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800"><strong className="flex items-center gap-2"><Lock size={14} /> Элемент заблокирован</strong><p className="mt-1">Его можно выбрать, но нельзя двигать или менять размер.</p><button type="button" onClick={() => patchLayout({ locked: false })} className="mt-2 inline-flex h-8 items-center gap-1.5 rounded-lg bg-amber-700 px-3 font-bold text-white"><Unlock size={13} /> Разблокировать</button></div> : <button type="button" onClick={() => patchLayout({ locked: true })} className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-bold"><Lock size={13} /> Заблокировать</button>}
+
+        <InspectorSection title="Основное">
+          <TextField label="ID" value={element.id} disabled={locked} onChange={(id) => patch({ id })} />
+          <TextField label="Название" value={element.name} disabled={locked} onChange={(name) => patch({ name })} />
+          <SelectField label="Тип" value={element.type} disabled={locked} onChange={(type) => patch({ type: type as IdmElement["type"] })} />
+          <TextField label="Текст" value={element.content.text || ""} disabled={locked} onChange={(text) => patchContent({ text })} wide />
+          <TextField label="Изображение / URL" value={element.content.alt || ""} disabled={locked} onChange={(alt) => patchContent({ alt })} wide />
+        </InspectorSection>
+
+        <InspectorSection title="Положение и размер">
+          <NumberField label="X" value={element.layout.x} disabled={locked} onChange={(x) => patchLayout({ x })} />
+          <NumberField label="Y" value={element.layout.y} disabled={locked} onChange={(y) => patchLayout({ y })} />
+          <NumberField label="Ширина" value={element.layout.width} min={4} disabled={locked} onChange={(width) => patchLayout({ width })} />
+          <NumberField label="Высота" value={element.layout.height} min={4} disabled={locked} onChange={(height) => patchLayout({ height })} />
+          <NumberField label="Поворот" value={editor.rotation} disabled={locked} onChange={(rotation) => patchEditor({ rotation })} />
+          <NumberField label="Радиус" value={element.layout.radius ?? 0} min={0} disabled={locked} onChange={(radius) => patchLayout({ radius })} />
+          <NumberField label="Z-index" value={element.layout.zIndex ?? 1} disabled={locked} onChange={(zIndex) => patchLayout({ zIndex })} />
+          <ToggleField label="Видимый" checked={element.layout.visible !== false} disabled={locked} onChange={(visible) => patchLayout({ visible })} />
+        </InspectorSection>
+
+        <InspectorSection title="Оформление">
+          <NumberField label="Прозрачность" value={element.style.opacity ?? 1} min={0} max={1} step={0.05} disabled={locked} onChange={(opacity) => patchStyle({ opacity })} />
+          <TextField label="Фон" value={element.style.background || ""} disabled={locked} onChange={(background) => patchStyle({ background })} />
+          <TextField label="Цвет текста" value={element.style.color || ""} disabled={locked} onChange={(color) => patchStyle({ color })} />
+          <TextField label="Шрифт" value={editor.fontFamily} disabled={locked} onChange={(fontFamily) => patchEditor({ fontFamily })} />
+          <NumberField label="Размер шрифта" value={editor.fontSize ?? 16} min={1} disabled={locked} onChange={(fontSize) => patchEditor({ fontSize })} />
+          <NumberField label="Насыщенность" value={editor.fontWeight ?? 400} min={100} step={100} disabled={locked} onChange={(fontWeight) => patchEditor({ fontWeight })} />
+          <label className="text-[11px] font-bold text-slate-500">Выравнивание<select disabled={locked} value={editor.textAlign} onChange={(event) => patchEditor({ textAlign: event.target.value as "left" | "center" | "right" })} className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs disabled:bg-slate-100"><option value="left">Слева</option><option value="center">По центру</option><option value="right">Справа</option></select></label>
+        </InspectorSection>
+
+        <InspectorSection title="Связи">
+          <TextField label="Component Ref" value={element.componentRef?.componentId || ""} disabled={locked} onChange={patchComponent} wide />
+          <TextField label="Asset Ref" value={element.content.assetRef || ""} disabled={locked} onChange={(assetRef) => patchContent({ assetRef })} wide />
+          <label className="col-span-2 text-[11px] font-bold text-slate-500">Заменить ассет<select disabled={locked} value={element.content.assetRef || ""} onChange={(event) => {
+            const asset = assets.find((item) => item.id === event.target.value);
+            patchContent({ assetRef: event.target.value || undefined, assetRole: asset?.isPrimaryLogo ? "primaryLogo" : asset?.type });
+          }} className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs disabled:bg-slate-100"><option value="">Без ассета</option>{assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}{asset.isPrimaryLogo ? " · основной логотип" : ""}</option>)}</select></label>
+        </InspectorSection>
+        {selectedAsset ? <section className="rounded-xl border border-violet/15 bg-violet/[0.035] p-3"><div className="flex h-28 items-center justify-center overflow-hidden rounded-lg bg-white">{selectedAsset.dataUrl || selectedAsset.fileUrl ? <img src={selectedAsset.dataUrl || selectedAsset.fileUrl || ""} alt={selectedAsset.name} className="size-full object-contain" /> : null}</div><p className="mt-2 text-xs font-black">{selectedAsset.name}</p><div className="mt-2 flex flex-wrap gap-2"><Link href={`/projects/${projectId}/assets`} className="inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-white px-2 text-[10px] font-bold"><ExternalLink size={12} /> Открыть в ассетах</Link>{selectedAsset.dataUrl || selectedAsset.fileUrl ? <a href={selectedAsset.dataUrl || selectedAsset.fileUrl || ""} download={selectedAsset.fileName || selectedAsset.name} className="inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-white px-2 text-[10px] font-bold"><Download size={12} /> Скачать</a> : null}</div><ElementCodeActions element={element} /></section> : null}
+      </div>
+    </aside>
+  );
+}
+
+function ElementCodeActions({ element }: { element: IdmElement }) {
+  const html = `<${element.type === "icon" ? "Icon" : "Image"} id="${element.id}" assetRef="${element.content.assetRef || ""}" x="${element.layout.x}" y="${element.layout.y}" width="${element.layout.width}" height="${element.layout.height}" />`;
+  const css = `#${element.id} { position: absolute; left: ${element.layout.x}px; top: ${element.layout.y}px; width: ${element.layout.width}px; height: ${element.layout.height}px; }`;
+  return <div className="mt-2 flex gap-2"><button type="button" onClick={() => navigator.clipboard.writeText(html)} className="text-[10px] font-bold text-violet">Скопировать HTML</button><button type="button" onClick={() => navigator.clipboard.writeText(css)} className="text-[10px] font-bold text-violet">Скопировать CSS</button></div>;
+}
+
+function InspectorSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return <section><h4 className="mb-3 border-b border-slate-100 pb-2 text-xs font-black text-slate-700">{title}</h4><div className="grid grid-cols-2 gap-2">{children}</div></section>;
+}
+function TextField({ label, value, onChange, disabled = false, wide = false }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; wide?: boolean }) {
+  return <label className={`text-[11px] font-bold text-slate-500 ${wide ? "col-span-2" : ""}`}>{label}<input value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 px-2 text-xs disabled:bg-slate-100" /></label>;
+}
+function NumberField({ label, value, onChange, disabled = false, min, max, step = 1 }: { label: string; value: number; onChange: (value: number) => void; disabled?: boolean; min?: number; max?: number; step?: number }) {
+  return <label className="text-[11px] font-bold text-slate-500">{label}<input type="number" value={value} min={min} max={max} step={step} disabled={disabled} onChange={(event) => onChange(Number(event.target.value))} className="mt-1 h-9 w-full rounded-lg border border-slate-200 px-2 text-xs disabled:bg-slate-100" /></label>;
+}
+function SelectField({ label, value, onChange, disabled }: { label: string; value: string; onChange: (value: string) => void; disabled: boolean }) {
+  return <label className="text-[11px] font-bold text-slate-500">{label}<select value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs disabled:bg-slate-100">{layoutElementTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select></label>;
+}
+function ToggleField({ label, checked, onChange, disabled = false }: { label: string; checked: boolean; onChange: (value: boolean) => void; disabled?: boolean }) {
+  return <label className="flex h-9 items-center gap-2 self-end rounded-lg border border-slate-200 px-2 text-[11px] font-bold text-slate-600"><input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} /> {label}</label>;
+}

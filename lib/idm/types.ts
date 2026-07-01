@@ -59,6 +59,7 @@ export type IdmElement = {
     text?: string;
     alt?: string;
     assetRef?: string;
+    assetRole?: string;
     icon?: string;
   };
   componentRef?: {

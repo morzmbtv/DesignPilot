@@ -10,6 +10,9 @@ import { assertProjectAccess, assertScreenAccess, requireUser } from "@/lib/secu
 import { AiJsonRecoveryError, recoverJson, throwJsonRecoveryError } from "@/lib/ai/json-recovery";
 import { compileDesignModel, DesignCompilerError } from "@/lib/idm/design-compiler";
 import { createIdmFromLegacy } from "@/lib/idm/legacy-converter";
+import { reconcileAiEditedIdm } from "@/lib/idm/reconcile-ai-edit";
+import type { InternalDesignModel } from "@/lib/idm/types";
+import { sanitizeAssetReferences } from "@/lib/idm/primary-logo";
 
 export type SuggestedRule = {
   category: string;
@@ -30,7 +33,7 @@ export type EditScreenVersionResult =
       diff: string;
       decisions: DecisionInput[];
     }
-  | { ok: false; error: string; recoverable?: boolean; logId?: string; model?: string; rawResponse?: string; parseError?: string; validation?: Record<string, string[]> };
+  | { ok: false; error: string; recoverable?: boolean; logId?: string; model?: string; rawResponse?: string; parseError?: string; validation?: Record<string, string[]>; deletionConfirmation?: { id: string; name: string }[] };
 
 const responseFormat: OpenRouterResponseFormat = {
   type: "json_object",
@@ -42,6 +45,7 @@ export async function editCurrentScreenVersion(
   userRequest: string,
   selectedElementId?: string,
   unlockConfirmed = false,
+  deletionConfirmed = false,
 ): Promise<EditScreenVersionResult> {
   const user = await requireUser();
   await assertProjectAccess(projectId, user.id);
@@ -56,6 +60,7 @@ export async function editCurrentScreenVersion(
       project: {
         include: {
           rules: { orderBy: [{ category: "asc" }, { createdAt: "asc" }] },
+          projectAssets: { select: { id: true, name: true, isPrimaryLogo: true } },
         },
       },
     },
@@ -113,6 +118,9 @@ export async function editCurrentScreenVersion(
               source: "legacy_migration",
             }),
     },
+    assets: {
+      primaryLogo: screen.project.projectAssets.find((asset) => asset.isPrimaryLogo) ?? null,
+    },
   };
 
   let logId: string | null = null;
@@ -128,7 +136,26 @@ export async function editCurrentScreenVersion(
     );
     logId = tracked.logId;
     const codeRules = screen.project.rules.map(({ category, name, value }) => ({ category, name, value }));
-    const edited = parseEditedScreenIdm(tracked.text, codeRules);
+    const previousIdm = context.latestVersion.internalDesignModel as InternalDesignModel;
+    const edited = parseEditedScreenIdm(
+      tracked.text,
+      codeRules,
+      previousIdm,
+      request,
+      deletionConfirmed,
+      screen.project.projectAssets.map((asset) => asset.id),
+    );
+    if (edited.deletionConfirmation.length) {
+      await completeAiPromptLog(logId, {
+        parsedResponse: { internalDesignModel: edited.internalDesignModel, deletionConfirmation: edited.deletionConfirmation },
+        error: "AI_ELEMENT_DELETION_REQUIRES_CONFIRMATION",
+      });
+      return {
+        ok: false,
+        error: "Элемент был удалён AI. Подтвердить удаление?",
+        deletionConfirmation: edited.deletionConfirmation,
+      };
+    }
     const targetedLockedIds = getTargetedLockedIds(lockedElements, request, selectedElementId);
     const changedLocked = lockedElements.filter((element) => {
       const candidate = edited.updatedLayoutJson.elements.find((item) => item.id === element.id);
@@ -163,6 +190,7 @@ export async function editCurrentScreenVersion(
       await completeAiPromptLog(logId, { parsedResponse: { ...edited, detectedEditIntent: "layout", selectedElementId: selectedElementId || null, validationErrors: [] }, error: "LAYOUT_NOT_MODIFIED" });
       return { ok: false, error: "AI не изменил расположение элементов для этой правки." };
     }
+    const usedAssetIds = Array.from(new Set(edited.internalDesignModel.hierarchy.elements.flatMap((element) => element.content.assetRef ? [element.content.assetRef] : [])));
 
     const version = await prisma.$transaction(async (tx) => {
       const latest = await tx.screenVersion.findFirst({
@@ -197,6 +225,9 @@ export async function editCurrentScreenVersion(
         },
       });
       await saveDecisions(tx, { projectId, screenId, screenVersionId: created.id, decisions: edited.decisions });
+      for (const assetId of usedAssetIds) {
+        await tx.projectAsset.updateMany({ where: { id: assetId, projectId }, data: { usageCount: { increment: 1 } } });
+      }
       return created;
     });
     await completeAiPromptLog(logId, { parsedResponse: { ...edited, internalDesignModel: edited.internalDesignModel, idmValidation: edited.idmValidation, detectedEditIntent: layoutIntent ? "layout" : "content", selectedElementId: selectedElementId || null, validationErrors: [] }, screenVersionId: version.id, error: null });
@@ -387,12 +418,22 @@ export async function saveSuggestedProjectRule(
   return { ok: true, mode: existing ? "updated" : "created" };
 }
 
-function parseEditedScreenIdm(raw: string, projectRules: Array<{ category: string; name: string; value: string }>) {
+function parseEditedScreenIdm(
+  raw: string,
+  projectRules: Array<{ category: string; name: string; value: string }>,
+  previousIdm: InternalDesignModel,
+  request: string,
+  deletionConfirmed: boolean,
+  validAssetIds: string[],
+) {
   const recovery = recoverJson(raw);
   if (!recovery.ok) throwJsonRecoveryError(raw, recovery);
   const parsed = recovery.value;
   if (!isRecord(parsed)) throwJsonRecoveryError(raw, recovery, ["Ответ должен быть JSON-объектом IDM."]);
-  const compiled = compileDesignModel(parsed, projectRules);
+  const candidate = compileDesignModel(parsed, projectRules);
+  const sanitized = sanitizeAssetReferences(candidate.idm, validAssetIds);
+  const reconciliation = reconcileAiEditedIdm(previousIdm, sanitized, request, deletionConfirmed);
+  const compiled = compileDesignModel(reconciliation.idm, projectRules);
 
   return {
     updatedDesignSpec: compiled.designSpec,
@@ -406,6 +447,8 @@ function parseEditedScreenIdm(raw: string, projectRules: Array<{ category: strin
     changeSummary: compiled.idm.exportMetadata.changeSummary || "AI edit",
     diff: compiled.idm.exportMetadata.changeSummary || "IDM обновлён; артефакты пересобраны Design Compiler.",
     decisions: [] as DecisionInput[],
+    deletionConfirmation: reconciliation.confirmationRequired,
+    restoredElements: reconciliation.restoredElements,
     aiRecovery: { stages: recovery.stages, warnings: recovery.warnings, repaired: recovery.repairedText !== recovery.jsonText },
   };
 }

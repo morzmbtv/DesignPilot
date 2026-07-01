@@ -25,7 +25,9 @@ export type AiLogAction =
   | "edit_screen"
   | "summarize_screen"
   | "extract_decisions"
-  | "test_openrouter";
+  | "test_openrouter"
+  | "generate_asset"
+  | "test_image_generation";
 
 type AiLogContext = {
   projectId: string;

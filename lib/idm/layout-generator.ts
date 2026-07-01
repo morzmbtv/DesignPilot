@@ -1,5 +1,6 @@
 import { layoutElementTypes, type LayoutElement, type LayoutJson } from "@/lib/layout";
 import type { IdmElement, InternalDesignModel } from "@/lib/idm/types";
+import { readEditorProperties } from "@/lib/idm/editor-properties";
 
 export function generateLayoutFromIdm(idm: InternalDesignModel): LayoutJson {
   const elements = idm.hierarchy.elements
@@ -11,6 +12,7 @@ export function generateLayoutFromIdm(idm: InternalDesignModel): LayoutJson {
 
 function toLayoutElement(element: IdmElement): LayoutElement {
   const type = layoutElementTypes.includes(element.type) ? element.type : "section";
+  const editor = readEditorProperties(element);
   return {
     id: element.id,
     type,
@@ -26,6 +28,15 @@ function toLayoutElement(element: IdmElement): LayoutElement {
     opacity: finite(element.style.opacity, 1),
     zIndex: finite(element.layout.zIndex, 1),
     locked: Boolean(element.layout.locked),
+    rotation: editor.rotation,
+    color: element.style.color,
+    fontFamily: editor.fontFamily,
+    fontSize: editor.fontSize,
+    fontWeight: editor.fontWeight,
+    visible: element.layout.visible !== false,
+    componentRef: element.componentRef?.componentId,
+    assetRef: element.content.assetRef,
+    assetRole: element.content.assetRole,
   };
 }
 

@@ -157,6 +157,7 @@ function normalizeElement(item: unknown, index: number, rootId: string, errors: 
       text: stringValue(content.text, stringValue(item.name, id)),
       alt: stringOrUndefined(content.alt),
       assetRef: stringOrUndefined(content.assetRef),
+      assetRole: stringOrUndefined(content.assetRole),
       icon: stringOrUndefined(content.icon),
     },
     componentRef: isRecord(item.componentRef) ? {

@@ -9,6 +9,9 @@ export type LayoutElement = {
   x: number; y: number; width: number; height: number;
   align?: string; style?: string; radius?: number; background?: string;
   opacity?: number; zIndex?: number; locked?: boolean;
+  rotation?: number; color?: string; fontFamily?: string; fontSize?: number;
+  fontWeight?: number; visible?: boolean; componentRef?: string; assetRef?: string;
+  assetRole?: string;
 };
 export type LayoutJson = { viewport: { width: 390; height: 844 }; elements: LayoutElement[] };
 

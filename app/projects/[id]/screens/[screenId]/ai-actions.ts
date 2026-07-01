@@ -11,6 +11,7 @@ import { styleSimilarity, type ComponentCandidate } from "@/lib/design-library/i
 import { assertProjectAccess, assertScreenAccess, requireUser } from "@/lib/security";
 import { AiJsonRecoveryError, recoverJson, throwJsonRecoveryError } from "@/lib/ai/json-recovery";
 import { compileDesignModel, DesignCompilerError } from "@/lib/idm/design-compiler";
+import { applyPrimaryLogoPolicy, sanitizeAssetReferences } from "@/lib/idm/primary-logo";
 
 export type GeneratedRule = {
   category: string;
@@ -98,6 +99,7 @@ export async function generateScreenWithAI(
           rules: { orderBy: [{ category: "asc" }, { createdAt: "asc" }] },
           designComponents: { where: { approved: true }, orderBy: { usageCount: "desc" }, take: 100 },
           designTokens: { orderBy: [{ group: "asc" }, { name: "asc" }] },
+          projectAssets: { select: { id: true, name: true, width: true, height: true, isPrimaryLogo: true } },
           screens: {
             orderBy: { createdAt: "asc" },
             include: {
@@ -177,6 +179,12 @@ export async function generateScreenWithAI(
       approvedComponents: project.designComponents.map(({ id, name, category, description, layoutJson, states, variants }) => ({ id, name, category, description, layoutJson, states, variants })),
       tokens: project.designTokens.map(({ group, name, value }) => ({ group, name, value })),
     },
+    assets: {
+      primaryLogo: project.projectAssets.find((asset) => asset.isPrimaryLogo) ? {
+        id: project.projectAssets.find((asset) => asset.isPrimaryLogo)!.id,
+        name: project.projectAssets.find((asset) => asset.isPrimaryLogo)!.name,
+      } : null,
+    },
   };
 
   let logId: string | null = null;
@@ -194,7 +202,14 @@ export async function generateScreenWithAI(
     logId = tracked.logId;
 
     const codeRules = project.rules.map(({ category, name, value }) => ({ category, name, value }));
-    const generated = parseGeneratedScreen(tracked.text, codeRules);
+    const generated = parseGeneratedScreen(
+      tracked.text,
+      codeRules,
+      project.projectAssets.find((asset) => asset.isPrimaryLogo) ?? null,
+      project.projectAssets.map((asset) => asset.id),
+      /splash|логотип|logo/i.test(`${screen.name} ${screen.purpose} ${request}`),
+    );
+    const usedAssetIds = Array.from(new Set(generated.internalDesignModel.hierarchy.elements.flatMap((element) => element.content.assetRef ? [element.content.assetRef] : [])));
     const version = await prisma.$transaction(async (tx) => {
       const latest = await tx.screenVersion.findFirst({
         where: { screenId },
@@ -227,6 +242,9 @@ export async function generateScreenWithAI(
         },
       });
       await saveDecisions(tx, { projectId, screenId, screenVersionId: created.id, decisions: generated.decisions });
+      for (const assetId of usedAssetIds) {
+        await tx.projectAsset.updateMany({ where: { id: assetId, projectId }, data: { usageCount: { increment: 1 } } });
+      }
       return created;
     });
     await completeAiPromptLog(logId, { parsedResponse: { ...generated, aiRecovery: generated.aiRecovery, validation: generated.validation, internalDesignModel: generated.internalDesignModel }, screenVersionId: version.id, error: null });
@@ -301,6 +319,7 @@ export async function previewScreenAiContext(
       project: {
         include: {
           rules: { orderBy: [{ category: "asc" }, { createdAt: "asc" }] },
+          projectAssets: { where: { isPrimaryLogo: true }, take: 1, select: { id: true, name: true } },
           screens: {
             orderBy: { createdAt: "asc" },
             include: {
@@ -344,6 +363,12 @@ export async function previewScreenAiContext(
       purpose: item.purpose,
       status: item.status,
     })),
+    assets: {
+      primaryLogo: project.projectAssets[0] ?? null,
+      instruction: project.projectAssets[0]
+        ? "Использовать только assetRef основного логотипа; не рисовать и не заменять логотип."
+        : "Основной логотип не загружен.",
+    },
     model: process.env.OPENROUTER_MODEL?.trim() || "not configured",
   };
   return {
@@ -441,12 +466,20 @@ function parseMessages(value: string): Array<{ role: "system" | "user" | "assist
   }
 }
 
-function parseGeneratedScreen(raw: string, projectRules: Array<{ category: string; name: string; value: string }>) {
+function parseGeneratedScreen(
+  raw: string,
+  projectRules: Array<{ category: string; name: string; value: string }>,
+  primaryLogo: { id: string; name: string; width: number | null; height: number | null } | null,
+  validAssetIds: string[],
+  ensureLogo: boolean,
+) {
   const recovery = recoverJson(raw);
   if (!recovery.ok) throwJsonRecoveryError(raw, recovery);
   const parsed = recovery.value;
   if (!isRecord(parsed)) throwJsonRecoveryError(raw, recovery, ["Ответ должен быть JSON-объектом."]);
-  const compiled = compileDesignModel(parsed, projectRules);
+  const candidate = compileDesignModel(parsed, projectRules);
+  const sanitized = sanitizeAssetReferences(candidate.idm, validAssetIds);
+  const compiled = compileDesignModel(applyPrimaryLogoPolicy(sanitized, primaryLogo, ensureLogo), projectRules);
   return {
     designSpec: compiled.designSpec,
     imagePrompt: compiled.imagePrompt,

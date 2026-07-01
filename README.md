@@ -21,6 +21,9 @@ NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="replace-with-a-random-long-secret"
 OPENROUTER_API_KEY="sk-or-v1-..."
 OPENROUTER_MODEL="openai/gpt-4o-mini"
+OPENROUTER_IMAGE_MODEL="openai/gpt-image-1"
+# Необязательно: модели перебираются слева направо, если основная недоступна.
+OPENROUTER_IMAGE_FALLBACK_MODELS=""
 INITIAL_ADMIN_EMAIL="admin@designpilot.local"
 NODE_ENV="development"
 ```
@@ -33,11 +36,28 @@ NEXTAUTH_URL=https://your-designpilot.vercel.app
 NEXTAUTH_SECRET
 OPENROUTER_API_KEY
 OPENROUTER_MODEL
+OPENROUTER_IMAGE_MODEL
+OPENROUTER_IMAGE_FALLBACK_MODELS
 INITIAL_ADMIN_EMAIL
 NODE_ENV=production
 ```
 
 Не добавляйте `.env` и `.env.local` в Git.
+
+### Ассеты и OpenRouter Image
+
+DesignPilot использует отдельный OpenRouter Image API (`POST /api/v1/images`). Укажите slug модели с поддержкой image output в `OPENROUTER_IMAGE_MODEL`. Актуальные модели можно получить через `GET https://openrouter.ai/api/v1/images/models`.
+
+1. Откройте проект и выберите пункт **Ассеты**.
+2. Для загрузки логотипа выберите тип **Логотип**, файл PNG/JPG/WEBP/SVG размером до 4 МБ и отметьте **Сделать основным логотипом**.
+3. Основной логотип автоматически передаётся в AI context как `assetRef`; DesignPilot запрещает модели перерисовывать его.
+4. В блоке **Сгенерировать ассет** укажите название, тип и описание. Результат сохраняется в PostgreSQL как data URL.
+5. Выберите текущий экран и нажмите **Добавить на экран**. Будет создана новая версия экрана, а ассет появится на Canvas и в Layers.
+6. Оригинал можно скачать из карточки ассета или из Inspector выбранного слоя.
+
+В **Настройки → OpenRouter** доступен тест image generation. Он создаёт тестовую иконку в выбранном проекте. Если `OPENROUTER_IMAGE_MODEL` отсутствует, интерфейс показывает ошибку «Image model не настроена».
+
+Для MVP файлы хранятся в PostgreSQL. Лимит одного загружаемого или сгенерированного файла — 4 МБ; в будущем хранилище можно заменить на Vercel Blob/S3 без изменения IDM.
 
 ### Как сгенерировать NEXTAUTH_SECRET
 
@@ -202,6 +222,12 @@ prisma/migrations/20260629150000_postgresql_baseline
 
 ```text
 prisma/migrations/20260630120000_auth_user_isolation
+```
+
+Project Asset Library добавляется миграцией:
+
+```text
+prisma/migrations/20260701130000_project_assets
 ```
 
 Для production используется PostgreSQL migration history. Старый локальный SQLite-файл автоматически не переносится.

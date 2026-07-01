@@ -3,6 +3,7 @@
 import { callOpenRouterTracked, completeAiPromptLog, OpenRouterError } from "@/lib/openrouter";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/security";
+import { testOpenRouterImage as runImageTest, OpenRouterImageError } from "@/lib/ai/openrouter-image";
 
 export type OpenRouterTestResult =
   | { ok: true; text: string }
@@ -37,5 +38,15 @@ export async function testOpenRouter(model: string): Promise<OpenRouterTestResul
   } catch (error) {
     if (error instanceof OpenRouterError) return { ok: false, error: error.message };
     return { ok: false, error: "Неизвестная ошибка OpenRouter." };
+  }
+}
+
+export async function testOpenRouterImage(projectId: string): Promise<OpenRouterTestResult> {
+  try {
+    const asset = await runImageTest(projectId);
+    return { ok: true, text: `Изображение создано и сохранено как ассет «${asset.name}».` };
+  } catch (error) {
+    if (error instanceof OpenRouterImageError) return { ok: false, error: error.message };
+    return { ok: false, error: "Неизвестная ошибка OpenRouter Image." };
   }
 }

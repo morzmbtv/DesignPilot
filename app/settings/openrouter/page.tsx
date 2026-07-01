@@ -3,13 +3,17 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { OpenRouterTestForm } from "@/components/openrouter-test-form";
 import { requireUser } from "@/lib/security";
+import { prisma } from "@/lib/prisma";
+import { OpenRouterImageTestForm } from "@/components/openrouter-image-test-form";
 
 export const dynamic = "force-dynamic";
 
 export default async function OpenRouterSettingsPage() {
-  await requireUser();
+  const user = await requireUser();
   const defaultModel = process.env.OPENROUTER_MODEL?.trim() || "";
   const isKeyConfigured = Boolean(process.env.OPENROUTER_API_KEY?.trim());
+  const imageModelConfigured = Boolean(process.env.OPENROUTER_IMAGE_MODEL?.trim());
+  const projects = await prisma.project.findMany({ where: { userId: user.id }, orderBy: { updatedAt: "desc" }, select: { id: true, name: true } });
 
   return (
     <AppShell>
@@ -28,6 +32,7 @@ export default async function OpenRouterSettingsPage() {
         </div>
       </div>
       <OpenRouterTestForm defaultModel={defaultModel} isKeyConfigured={isKeyConfigured} />
+      <OpenRouterImageTestForm projects={projects} configured={imageModelConfigured} />
       <p className="mt-6 max-w-2xl text-xs leading-5 text-muted">
         API-ключ читается только сервером из переменной OPENROUTER_API_KEY и не передаётся в браузер.
         Модель из этого поля применяется только к тестовому запросу.

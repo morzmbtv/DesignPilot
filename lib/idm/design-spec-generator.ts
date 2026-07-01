@@ -1,4 +1,5 @@
 import type { InternalDesignModel } from "@/lib/idm/types";
+import { readEditorProperties } from "@/lib/idm/editor-properties";
 
 export function generateDesignSpecFromIdm(idm: InternalDesignModel) {
   const viewport = idm.metadata.viewport;
@@ -11,17 +12,21 @@ export function generateDesignSpecFromIdm(idm: InternalDesignModel) {
     `Viewport: ${viewport.width}×${viewport.height}px, safe area top ${viewport.safeAreaTop}px, page padding ${viewport.pagePadding}px.`,
     "",
     "## Иерархия и расположение",
-    ...elements.map((element, index) => [
+    ...elements.map((element, index) => {
+      const editor = readEditorProperties(element);
+      return [
       `${index + 1}. ${element.name} (${element.type}, id=${element.id})`,
       `   - parent: ${element.parent || "none"}`,
       `   - semanticRole: ${element.semanticRole}`,
       `   - content: ${element.content.text || element.content.alt || element.name}`,
-      `   - layout: x=${element.layout.x}, y=${element.layout.y}, width=${element.layout.width}, height=${element.layout.height}, align=${element.layout.align || "left"}, zIndex=${element.layout.zIndex ?? 1}`,
-      `   - style: background=${element.style.background || "transparent"}, typography=${element.style.typography || "default"}, color=${element.style.color || "default"}, radius=${element.layout.radius ?? 0}, opacity=${element.style.opacity ?? 1}`,
+      element.content.assetRef ? `   - asset: assetRef=${element.content.assetRef}, role=${element.content.assetRole || "asset"}` : "   - asset: нет",
+      `   - layout: x=${element.layout.x}, y=${element.layout.y}, width=${element.layout.width}, height=${element.layout.height}, rotation=${editor.rotation}, align=${element.layout.align || "left"}, zIndex=${element.layout.zIndex ?? 1}, visible=${element.layout.visible !== false}, locked=${Boolean(element.layout.locked)}`,
+      `   - style: background=${element.style.background || "transparent"}, typography=${element.style.typography || "default"}, font=${editor.fontFamily || "default"} ${editor.fontSize || "default"}px/${editor.fontWeight || "default"}, color=${element.style.color || "default"}, radius=${element.layout.radius ?? 0}, opacity=${element.style.opacity ?? 1}`,
       `   - constraints: ${element.constraints.length ? element.constraints.join("; ") : "нет"}`,
       `   - behavior: ${element.behavior.length ? element.behavior.join("; ") : "нет"}`,
       element.componentRef ? `   - componentRef: ${element.componentRef.name} (${element.componentRef.componentId})` : "   - componentRef: нет",
-    ].join("\n")),
+      ].join("\n");
+    }),
     "",
     "## Motion",
     generateMotionSummary(idm),

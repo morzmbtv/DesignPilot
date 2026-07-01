@@ -48,7 +48,17 @@ export function EditCurrentVersionPanel({
         : false;
       if (lockCheck.requiresConfirmation && !unlockConfirmed) return;
       setIsEditing(true);
-      const response = await editCurrentScreenVersion(projectId, screenId, request, undefined, unlockConfirmed);
+      let response = await editCurrentScreenVersion(projectId, screenId, request, undefined, unlockConfirmed);
+      if (!response.ok && response.deletionConfirmation?.length) {
+        const confirmed = window.confirm(
+          `Элемент был удалён AI.\n\n${response.deletionConfirmation.map((item) => `• ${item.name} (${item.id})`).join("\n")}\n\nПодтвердить удаление?`,
+        );
+        if (!confirmed) {
+          setError("Удаление отменено. Исходные элементы сохранены.");
+          return;
+        }
+        response = await editCurrentScreenVersion(projectId, screenId, request, undefined, unlockConfirmed, true);
+      }
       if (!response.ok) {
         setError(response.error);
         if (response.recoverable) setFailure(response);

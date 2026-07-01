@@ -8,18 +8,19 @@ datasource db {
 }
 
 model User {
-  id            String        @id @default(cuid())
+  id            String         @id @default(cuid())
   name          String?
-  email         String        @unique
+  email         String         @unique
   emailVerified DateTime?
   image         String?
   passwordHash  String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   accounts      Account[]
   sessions      Session[]
   settings      UserSettings?
   projects      Project[]
+  projectAssets ProjectAsset[]
 }
 
 model Account {
@@ -71,20 +72,20 @@ model UserSettings {
 }
 
 model Project {
-  id                 String        @id @default(cuid())
+  id                 String                      @id @default(cuid())
   userId             String?
   name               String
-  description        String        @default("")
-  targetUsers        String        @default("")
-  appGoal            String        @default("")
-  platform           String        @default("iOS и Android")
-  styleDirection     String        @default("")
-  designRequirements String        @default("")
-  architectureNotes  String        @default("")
-  constraints        String        @default("")
-  designSystemSource String        @default("current_library")
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
+  description        String                      @default("")
+  targetUsers        String                      @default("")
+  appGoal            String                      @default("")
+  platform           String                      @default("iOS и Android")
+  styleDirection     String                      @default("")
+  designRequirements String                      @default("")
+  architectureNotes  String                      @default("")
+  constraints        String                      @default("")
+  designSystemSource String                      @default("current_library")
+  createdAt          DateTime                    @default(now())
+  updatedAt          DateTime                    @updatedAt
   rules              ProjectRule[]
   screens            Screen[]
   designDecisions    DesignDecision[]
@@ -98,7 +99,8 @@ model Project {
   similarityReports  ComponentSimilarityReport[]
   styleReports       StyleSimilarityReport[]
   screenDesigns      ScreenDesign[]
-  user               User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectAssets      ProjectAsset[]
+  user               User?                       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -118,17 +120,17 @@ model ProjectRule {
 }
 
 model Screen {
-  id                String          @id @default(cuid())
+  id                String           @id @default(cuid())
   projectId         String
-  approvedVersionId String?         @unique
+  approvedVersionId String?          @unique
   name              String
-  purpose           String          @default("")
-  status            String          @default("draft")
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  versions          ScreenVersion[] @relation("ScreenVersions")
-  approvedVersion   ScreenVersion?  @relation("ApprovedScreenVersion", fields: [approvedVersionId], references: [id], onDelete: SetNull)
+  purpose           String           @default("")
+  status            String           @default("draft")
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  project           Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions          ScreenVersion[]  @relation("ScreenVersions")
+  approvedVersion   ScreenVersion?   @relation("ApprovedScreenVersion", fields: [approvedVersionId], references: [id], onDelete: SetNull)
   designDecisions   DesignDecision[]
   summaries         ScreenSummary[]
   aiPromptLogs      AiPromptLog[]
@@ -138,44 +140,44 @@ model Screen {
 }
 
 model ScreenVersion {
-  id            String   @id @default(cuid())
-  screenId      String
-  versionNumber Int
-  userRequest   String   @default("")
-  designSpec    String   @default("")
-  imagePrompt   String   @default("")
-  changeSummary String   @default("")
-  diff          String   @default("")
-  newRulesJson  String   @default("[]")
-  layoutJson    String?
-  htmlLayout    String?
-  flutterWidgetTree String?
-  createdAt     DateTime @default(now())
-  screen        Screen   @relation("ScreenVersions", fields: [screenId], references: [id], onDelete: Cascade)
-  approvedForScreen Screen? @relation("ApprovedScreenVersion")
-  designDecisions DesignDecision[]
-  summaries       ScreenSummary[]
-  aiPromptLogs    AiPromptLog[]
+  id                    String                 @id @default(cuid())
+  screenId              String
+  versionNumber         Int
+  userRequest           String                 @default("")
+  designSpec            String                 @default("")
+  imagePrompt           String                 @default("")
+  changeSummary         String                 @default("")
+  diff                  String                 @default("")
+  newRulesJson          String                 @default("[]")
+  layoutJson            String?
+  htmlLayout            String?
+  flutterWidgetTree     String?
+  createdAt             DateTime               @default(now())
+  screen                Screen                 @relation("ScreenVersions", fields: [screenId], references: [id], onDelete: Cascade)
+  approvedForScreen     Screen?                @relation("ApprovedScreenVersion")
+  designDecisions       DesignDecision[]
+  summaries             ScreenSummary[]
+  aiPromptLogs          AiPromptLog[]
   styleSimilarityReport StyleSimilarityReport?
-  internalDesignModel ScreenDesign?
+  internalDesignModel   ScreenDesign?
 
   @@unique([screenId, versionNumber])
   @@index([screenId])
 }
 
 model ScreenDesign {
-  id              String   @id @default(cuid())
+  id              String        @id @default(cuid())
   projectId       String
   screenId        String
-  screenVersionId String   @unique
+  screenVersionId String        @unique
   modelJson       String
   normalizedJson  String?
   validationJson  String?
-  compilerVersion String   @default("idm-v1")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  screen          Screen   @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  compilerVersion String        @default("idm-v1")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  screen          Screen        @relation(fields: [screenId], references: [id], onDelete: Cascade)
   screenVersion   ScreenVersion @relation(fields: [screenVersionId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
@@ -183,11 +185,11 @@ model ScreenDesign {
 }
 
 model DesignComponent {
-  id                    String   @id @default(cuid())
+  id                    String                      @id @default(cuid())
   projectId             String
   name                  String
-  description           String   @default("")
-  category              String   @default("Misc")
+  description           String                      @default("")
+  category              String                      @default("Misc")
   screenshot            String?
   preview               String?
   layoutJson            String?
@@ -200,11 +202,11 @@ model DesignComponent {
   spacing               String?
   states                String?
   variants              String?
-  source                String   @default("manual")
-  usageCount            Int      @default(0)
-  approved              Boolean  @default(false)
-  status                String   @default("draft")
-  createdBy             String   @default("user")
+  source                String                      @default("manual")
+  usageCount            Int                         @default(0)
+  approved              Boolean                     @default(false)
+  status                String                      @default("draft")
+  createdBy             String                      @default("user")
   basedOnComponents     String?
   creationReason        String?
   differences           String?
@@ -221,9 +223,9 @@ model DesignComponent {
   similarityHistory     String?
   editHistory           String?
   approveHistory        String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  project               Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  project               Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   similarityReports     ComponentSimilarityReport[]
 
   @@index([projectId, status])
@@ -232,16 +234,16 @@ model DesignComponent {
 }
 
 model DesignToken {
-  id        String   @id @default(cuid())
-  projectId String
-  group     String
-  name      String
-  value     String
-  description String @default("")
-  source    String   @default("manual")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  projectId   String
+  group       String
+  name        String
+  value       String
+  description String   @default("")
+  source      String   @default("manual")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, group, name])
   @@index([projectId, group])
@@ -259,21 +261,53 @@ model DesignAsset {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
   @@index([projectId, type])
 }
 
+model ProjectAsset {
+  id            String   @id @default(cuid())
+  userId        String
+  projectId     String
+  name          String
+  type          String
+  source        String   @default("uploaded")
+  mimeType      String
+  fileName      String?
+  fileSize      Int?
+  width         Int?
+  height        Int?
+  dataUrl       String?
+  fileUrl       String?
+  prompt        String?
+  provider      String?
+  model         String?
+  isPrimaryLogo Boolean  @default(false)
+  isBrandAsset  Boolean  @default(false)
+  usageCount    Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([projectId, type])
+  @@index([projectId, isPrimaryLogo])
+}
+
 model DesignPattern {
-  id          String   @id @default(cuid())
-  projectId   String
-  name        String
-  category    String
-  description String   @default("")
-  layoutJson  String?
+  id           String   @id @default(cuid())
+  projectId    String
+  name         String
+  category     String
+  description  String   @default("")
+  layoutJson   String?
   componentIds String?
-  usageCount  Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  usageCount   Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
   @@index([projectId, category])
 }
 
@@ -289,37 +323,40 @@ model DesignImport {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
   @@index([projectId, status])
 }
 
 model ComponentSimilarityReport {
-  id                 String   @id @default(cuid())
-  projectId          String
-  componentId        String?
-  candidateName      String
-  score              Float
-  recommendation     String
-  reasonsJson        String?
-  createdAt          DateTime @default(now())
-  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  component          DesignComponent? @relation(fields: [componentId], references: [id], onDelete: SetNull)
+  id             String           @id @default(cuid())
+  projectId      String
+  componentId    String?
+  candidateName  String
+  score          Float
+  recommendation String
+  reasonsJson    String?
+  createdAt      DateTime         @default(now())
+  project        Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  component      DesignComponent? @relation(fields: [componentId], references: [id], onDelete: SetNull)
+
   @@index([projectId, score])
 }
 
 model StyleSimilarityReport {
-  id              String   @id @default(cuid())
+  id              String        @id @default(cuid())
   projectId       String
-  screenVersionId String   @unique
+  screenVersionId String        @unique
   score           Float
   reasonsJson     String?
-  createdAt       DateTime @default(now())
-  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   screenVersion   ScreenVersion @relation(fields: [screenVersionId], references: [id], onDelete: Cascade)
+
   @@index([projectId, score])
 }
 
 model DesignDecision {
-  id              String   @id @default(cuid())
+  id              String         @id @default(cuid())
   projectId       String
   screenId        String?
   screenVersionId String?
@@ -328,12 +365,12 @@ model DesignDecision {
   oldValue        String?
   newValue        String?
   reason          String?
-  source          String   @default("ai")
-  status          String   @default("proposed")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  screen          Screen?  @relation(fields: [screenId], references: [id], onDelete: SetNull)
+  source          String         @default("ai")
+  status          String         @default("proposed")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  screen          Screen?        @relation(fields: [screenId], references: [id], onDelete: SetNull)
   screenVersion   ScreenVersion? @relation(fields: [screenVersionId], references: [id], onDelete: SetNull)
 
   @@index([projectId, status])
@@ -342,20 +379,20 @@ model DesignDecision {
 }
 
 model ScreenSummary {
-  id                String   @id @default(cuid())
+  id                String        @id @default(cuid())
   projectId         String
   screenId          String
-  screenVersionId   String   @unique
+  screenVersionId   String        @unique
   summary           String
   mainPurpose       String
   primaryUserAction String?
   usedPatterns      String?
   usedRules         String?
   visualNotes       String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  screen            Screen   @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  project           Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  screen            Screen        @relation(fields: [screenId], references: [id], onDelete: Cascade)
   screenVersion     ScreenVersion @relation(fields: [screenVersionId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
@@ -363,13 +400,13 @@ model ScreenSummary {
 }
 
 model AiPromptLog {
-  id              String   @id @default(cuid())
+  id              String         @id @default(cuid())
   projectId       String
   screenId        String?
   screenVersionId String?
   action          String
   model           String
-  provider        String   @default("openrouter")
+  provider        String         @default("openrouter")
   requestPreview  String
   fullPrompt      String
   rawResponse     String?
@@ -377,9 +414,9 @@ model AiPromptLog {
   finishReason    String?
   tokensJson      String?
   error           String?
-  createdAt       DateTime @default(now())
-  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  screen          Screen?  @relation(fields: [screenId], references: [id], onDelete: SetNull)
+  createdAt       DateTime       @default(now())
+  project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  screen          Screen?        @relation(fields: [screenId], references: [id], onDelete: SetNull)
   screenVersion   ScreenVersion? @relation(fields: [screenVersionId], references: [id], onDelete: SetNull)
 
   @@index([projectId, createdAt])

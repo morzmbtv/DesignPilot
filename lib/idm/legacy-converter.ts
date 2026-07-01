@@ -1,5 +1,6 @@
 import { createBlankLayout, parseLayoutJson, type LayoutElement, type LayoutJson } from "@/lib/layout";
 import { IDM_COMPILER_VERSION, type IdmElement, type InternalDesignModel } from "@/lib/idm/types";
+import { writeEditorProperties } from "@/lib/idm/editor-properties";
 
 type LegacyInput = {
   projectName: string;
@@ -107,7 +108,7 @@ function readLayout(value: LegacyInput["layoutJson"], screenName: string) {
 }
 
 function elementToIdm(element: LayoutElement, parent: string | null): IdmElement {
-  return {
+  const idmElement: IdmElement = {
     id: element.id,
     type: element.type,
     name: element.label || element.id,
@@ -128,15 +129,27 @@ function elementToIdm(element: LayoutElement, parent: string | null): IdmElement
       background: element.background || "transparent",
       opacity: element.opacity ?? 1,
       typography: element.style || "default",
+      color: element.color,
     },
     animation: defaultAnimation(),
     constraints: [],
     behavior: element.type === "button" ? ["tap"] : [],
     semanticRole: semanticRole(element.type),
-    content: { text: element.label || element.id },
-    componentRef: null,
+    content: { text: element.label || element.id, assetRef: element.assetRef, assetRole: element.assetRole },
+    componentRef: element.componentRef ? {
+      componentId: element.componentRef,
+      name: element.componentRef,
+      source: "approved_library",
+    } : null,
     state: {},
   };
+  return writeEditorProperties(idmElement, {
+    rotation: element.rotation ?? 0,
+    fontFamily: element.fontFamily || "",
+    fontSize: element.fontSize,
+    fontWeight: element.fontWeight,
+    textAlign: element.align === "center" || element.align === "right" ? element.align : "left",
+  });
 }
 
 function defaultAnimation() {
