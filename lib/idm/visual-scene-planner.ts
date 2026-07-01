@@ -1,9 +1,9 @@
 import { writeEditorProperties } from "@/lib/idm/editor-properties";
-import type { IdmElement, InternalDesignModel } from "@/lib/idm/types";
+import type { IdmComposition, IdmElement, InternalDesignModel } from "@/lib/idm/types";
 import type { StyleDna } from "@/lib/project-config";
 
 type PrimaryLogo = { id: string; name: string; width: number | null; height: number | null } | null;
-type SceneType = "splash" | "login" | "onboarding" | "home" | "profile" | "landing" | "basic";
+type SceneType = "splash" | "login" | "onboarding" | "home" | "profile" | "settings" | "landing" | "basic";
 
 type SceneContext = {
   screenName: string;
@@ -13,6 +13,8 @@ type SceneContext = {
   projectType: string;
   platform: string;
   styleDna: StyleDna;
+  projectMemory: string;
+  projectRules: string[];
   primaryLogo: PrimaryLogo;
 };
 
@@ -85,106 +87,104 @@ function buildRecipe(
   if (sceneType === "onboarding") return onboardingRecipe(context, palette, viewport);
   if (sceneType === "home") return homeRecipe(context, palette, viewport);
   if (sceneType === "profile") return profileRecipe(context, palette, viewport);
+  if (sceneType === "settings") return settingsRecipe(palette, viewport);
   if (sceneType === "splash") return splashRecipe(context, palette, viewport);
   return [backgroundLayer(palette, viewport)];
 }
 
+function settingsRecipe(palette: Palette, viewport: InternalDesignModel["metadata"]["viewport"]) {
+  return [
+    backgroundLayer(palette, viewport),
+    textElement("settings_title", "Заголовок настроек", "Настройки", compose("critical", "topLeft", "large", { role: "title", width: "full", maxWidth: 720, height: 56, topOffset: 72, leftOffset: 20, align: "left", avoid: ["safeArea"] }), palette.text, 30, 700),
+    surface("settings_list", "Список настроек", "section", compose("content", "center", "large", { role: "settingsList", width: "full", maxWidth: 720, heightRatio: 0.62, maxHeight: 620, horizontalPadding: 20 }), palette.surface, 24),
+  ];
+}
+
 function splashRecipe(context: SceneContext, palette: Palette, viewport: InternalDesignModel["metadata"]["viewport"]) {
-  const sx = viewport.width / 390;
-  const sy = viewport.height / 844;
   const domain = domainVisual(context.projectType, context);
   return [
     backgroundLayer(palette, viewport),
-    visual("background_decoration_large_left", "decoration", "Большой фоновый декор слева", box(-80, 120, 220, 220, 1, sx, sy), palette.softDecoration, `${palette.visualLanguage}; translucent rounded abstract shape; ${context.styleDna.backgroundStyle || "soft depth"}`),
-    visual("background_decoration_large_right", "decoration", "Большой фоновый декор справа", box(220, 80, 230, 230, 1, sx, sy), palette.softDecorationAlt, `${palette.visualLanguage}; translucent rounded abstract shape; premium brand atmosphere`),
-    visual("decorative_shape_small_1", "decoration", "Малый декоративный элемент 1", box(32, 330, 38, 38, 2, sx, sy), palette.accentGradient, `small ${context.styleDna.illustrationStyle || "3D"} abstract brand decoration`),
-    visual("decorative_shape_small_2", "decoration", "Малый декоративный элемент 2", box(326, 350, 30, 30, 2, sx, sy), palette.accentGradient, "small subtle brand decoration"),
-    visual("decorative_shape_small_3", "decoration", "Малый декоративный элемент 3", box(38, 682, 26, 26, 2, sx, sy), palette.accentGradient, "small subtle brand decoration"),
-    visual("hero_product_visual", domain.type, domain.name, box(28, 468, 232, 194, 3, sx, sy), palette.heroGradient, domain.primary),
-    visual("hero_character_or_object", domain.secondaryType, domain.secondaryName, box(178, 418, 242, 302, 4, sx, sy), palette.heroGradientAlt, domain.secondary),
-    logoElement(context.primaryLogo, context.projectName, box(75, 290, 240, 96, 5, sx, sy)),
-    textElement("loading_text", "Текст загрузки", "Загрузка...", box(0, 730, 390, 48, 6, sx, sy), palette.text, Math.round(32 * Math.min(sx, sy)), 700),
-    progressElement(box(95, 790, 200, 8, 6, sx, sy), palette),
+    visual("background_decoration_large_left", "decoration", "Большой фоновый декор слева", compose("decorative", "topLeft", "large", { widthRatio: 0.56, maxWidth: 230, topOffset: 100, leftOffset: -72, allowOverflow: "partial" }), palette.softDecoration, `${palette.visualLanguage}; translucent rounded abstract shape; ${context.styleDna.backgroundStyle || "soft depth"}`, false, { width: 220, height: 220 }),
+    visual("background_decoration_large_right", "decoration", "Большой фоновый декор справа", compose("decorative", "topRight", "large", { widthRatio: 0.58, maxWidth: 240, topOffset: 72, rightOffset: -62, allowOverflow: "partial" }), palette.softDecorationAlt, `${palette.visualLanguage}; translucent rounded abstract shape; premium brand atmosphere`, false, { width: 230, height: 230 }),
+    visual("decorative_shape_small_1", "decoration", "Малый декоративный элемент 1", compose("decorative", "centerLeft", "tiny", { widthRatio: 0.1, maxWidth: 40, leftOffset: 28, allowOverflow: "partial" }), palette.accentGradient, `small ${context.styleDna.illustrationStyle || "3D"} abstract brand decoration`, false, { width: 38, height: 38 }),
+    visual("decorative_shape_small_2", "decoration", "Малый декоративный элемент 2", compose("decorative", "centerRight", "tiny", { widthRatio: 0.08, maxWidth: 32, rightOffset: 28, allowOverflow: "partial" }), palette.accentGradient, "small subtle brand decoration", false, { width: 30, height: 30 }),
+    visual("decorative_shape_small_3", "decoration", "Малый декоративный элемент 3", compose("decorative", "bottomLeft", "tiny", { widthRatio: 0.07, maxWidth: 28, bottomOffset: 130, leftOffset: 36, allowOverflow: "partial" }), palette.accentGradient, "small subtle brand decoration", false, { width: 26, height: 26 }),
+    visual("hero_product_visual", domain.type, domain.name, compose("content", "bottomLeft", "large", { role: "heroSupporting", widthRatio: 0.58, maxWidth: 260, bottomOffset: 180, leftOffset: 20, allowOverflow: "none" }), palette.heroGradient, domain.primary, false, { width: 232, height: 194 }),
+    visual("hero_character_or_object", domain.secondaryType, domain.secondaryName, compose("content", "bottomRight", "hero", { role: "hero", widthRatio: 0.55, maxWidth: 260, bottomOffset: 170, rightOffset: -20, allowOverflow: "partial" }), palette.heroGradientAlt, domain.secondary, false, { width: 242, height: 302 }),
+    logoElement(context.primaryLogo, context.projectName, compose("critical", "center", "medium", { role: "brandLogo", widthRatio: 0.55, maxWidth: 240, maxHeight: 96, allowOverflow: "none" })),
+    textElement("loading_text", "Текст загрузки", "Загрузка...", compose("critical", "bottomCenter", "medium", { role: "loadingText", width: "full", height: 48, bottomOffset: 72, horizontalPadding: 20, align: "center", avoid: ["safeArea", "bottomControls"] }), palette.text, 32, 700),
+    progressElement(compose("critical", "bottomCenter", "medium", { role: "progress", widthRatio: 0.55, maxWidth: 220, height: 8, bottomOffset: 42, avoid: ["bottomControls"] }), palette),
   ];
 }
 
 function loginRecipe(context: SceneContext, palette: Palette, viewport: InternalDesignModel["metadata"]["viewport"]) {
-  const w = viewport.width;
-  const cardWidth = Math.min(w - 40, 420);
-  const x = Math.round((w - cardWidth) / 2);
   return [
     backgroundLayer(palette, viewport),
-    ...genericDecorations(palette, viewport),
-    logoElement(context.primaryLogo, context.projectName, { x: Math.round((w - 180) / 2), y: 72, width: 180, height: 72, zIndex: 3 }),
-    surface("login_form_card", "Форма входа", "card", { x, y: 190, width: cardWidth, height: 410, zIndex: 3 }, palette.surface, 28),
-    textElement("login_title", "Заголовок входа", "Войти", { x: x + 24, y: 224, width: cardWidth - 48, height: 44, zIndex: 4 }, palette.text, 30, 700),
-    surface("email_input", "Поле email", "input", { x: x + 24, y: 300, width: cardWidth - 48, height: 56, zIndex: 4 }, "#FFFFFF", 14),
-    surface("password_input", "Поле пароля", "input", { x: x + 24, y: 372, width: cardWidth - 48, height: 56, zIndex: 4 }, "#FFFFFF", 14),
-    surface("login_primary_button", "Основная кнопка входа", "button", { x: x + 24, y: 460, width: cardWidth - 48, height: 60, zIndex: 4 }, palette.primary, 16),
+    ...genericDecorations(palette),
+    logoElement(context.primaryLogo, context.projectName, compose("critical", "topCenter", "medium", { role: "brandLogo", widthRatio: 0.46, maxWidth: 180, maxHeight: 72, topOffset: 72 })),
+    surface("login_form_card", "Форма входа", "card", compose("content", "center", "large", { role: "form", width: "full", maxWidth: 420, heightRatio: 0.49, maxHeight: 430, horizontalPadding: 20, allowOverflow: "none" }), palette.surface, 28, { width: 350, height: 410 }),
+    textElement("login_title", "Заголовок входа", "Войти", compose("critical", "topCenter", "medium", { role: "title", width: "full", maxWidth: 372, height: 44, topOffset: 220, horizontalPadding: 24 }), palette.text, 30, 700),
+    surface("email_input", "Поле email", "input", compose("critical", "topCenter", "medium", { role: "input", width: "full", maxWidth: 372, height: 56, topOffset: 296, horizontalPadding: 24 }), "#FFFFFF", 14),
+    surface("password_input", "Поле пароля", "input", compose("critical", "topCenter", "medium", { role: "input", width: "full", maxWidth: 372, height: 56, relationTo: "below:email_input", horizontalPadding: 24 }), "#FFFFFF", 14),
+    surface("login_primary_button", "Основная кнопка входа", "button", compose("critical", "topCenter", "medium", { role: "primaryAction", width: "full", maxWidth: 372, height: 60, relationTo: "below:password_input", horizontalPadding: 24 }), palette.primary, 16),
   ];
 }
 
 function onboardingRecipe(context: SceneContext, palette: Palette, viewport: InternalDesignModel["metadata"]["viewport"]) {
-  const w = viewport.width;
   return [
     backgroundLayer(palette, viewport),
-    ...genericDecorations(palette, viewport),
-    visual("onboarding_hero_visual", "illustration", "Главная иллюстрация", { x: w * 0.1, y: 110, width: w * 0.8, height: 320, zIndex: 3 }, palette.heroGradient, `${domainVisual(context.projectType, context).primary}; ${palette.visualLanguage}`),
-    textElement("onboarding_title", "Заголовок", "Откройте новые возможности", { x: 24, y: 470, width: w - 48, height: 70, zIndex: 4 }, palette.text, 30, 700),
-    textElement("onboarding_description", "Описание", context.screenPurpose || "Короткое объяснение пользы продукта", { x: 24, y: 548, width: w - 48, height: 80, zIndex: 4 }, palette.mutedText, 17, 400),
-    progressElement({ x: w / 2 - 48, y: 660, width: 96, height: 8, zIndex: 4 }, palette, "onboarding_pagination"),
-    surface("onboarding_cta", "Кнопка продолжения", "button", { x: 20, y: viewport.height - 104, width: w - 40, height: 64, zIndex: 5 }, palette.primary, 18),
+    ...genericDecorations(palette),
+    visual("onboarding_hero_visual", "illustration", "Главная иллюстрация", compose("content", "topCenter", "hero", { role: "hero", widthRatio: 0.8, maxWidth: 540, maxHeight: 360, topOffset: 110 }), palette.heroGradient, `${domainVisual(context.projectType, context).primary}; ${palette.visualLanguage}`, false, { width: 320, height: 320 }),
+    textElement("onboarding_title", "Заголовок", "Откройте новые возможности", compose("critical", "bottomCenter", "large", { role: "title", width: "full", maxWidth: 680, height: 70, bottomOffset: 300, horizontalPadding: 24 }), palette.text, 30, 700),
+    textElement("onboarding_description", "Описание", context.screenPurpose || "Короткое объяснение пользы продукта", compose("critical", "bottomCenter", "large", { role: "description", width: "full", maxWidth: 680, height: 80, bottomOffset: 210, horizontalPadding: 24 }), palette.mutedText, 17, 400),
+    progressElement(compose("critical", "bottomCenter", "small", { role: "pagination", width: 96, height: 8, bottomOffset: 165 }), palette, "onboarding_pagination"),
+    surface("onboarding_cta", "Кнопка продолжения", "button", compose("critical", "bottomCenter", "large", { role: "primaryAction", width: "full", maxWidth: 540, height: 64, bottomOffset: 40, horizontalPadding: 20, avoid: ["bottomControls"] }), palette.primary, 18),
   ];
 }
 
 function homeRecipe(_context: SceneContext, palette: Palette, viewport: InternalDesignModel["metadata"]["viewport"]) {
-  const w = viewport.width;
-  const desktop = w >= 900;
+  const desktop = viewport.width >= 900;
   return [
     backgroundLayer(palette, viewport),
-    surface("app_bar", "Верхняя панель", "section", { x: 0, y: 0, width: w, height: desktop ? 80 : 104, zIndex: 2 }, palette.surface, 0),
-    surface("summary_card_primary", "Главная карточка", "card", { x: desktop ? 64 : 20, y: desktop ? 120 : 128, width: desktop ? 420 : w - 40, height: 170, zIndex: 3 }, palette.heroGradient, 24),
-    surface("quick_actions", "Быстрые действия", "section", { x: desktop ? 508 : 20, y: desktop ? 120 : 318, width: desktop ? 500 : w - 40, height: 120, zIndex: 3 }, palette.surface, 20),
-    surface("list_section", "Основной список", "section", { x: desktop ? 64 : 20, y: desktop ? 320 : 466, width: desktop ? w - 128 : w - 40, height: desktop ? 560 : 280, zIndex: 3 }, palette.surface, 24),
-    ...(desktop ? [] : [surface("bottom_navigation", "Нижняя навигация", "bottomNav", { x: 0, y: viewport.height - 84, width: w, height: 84, zIndex: 8 }, "#FFFFFF", 24)]),
+    surface("app_bar", "Верхняя панель", "section", compose("critical", "topCenter", "full", { role: "appBar", width: "full", height: desktop ? 80 : 104, topOffset: 0, verticalPadding: 0 }), palette.surface, 0),
+    surface("summary_card_primary", "Главная карточка", "card", compose("content", "topLeft", "large", { role: "summary", widthRatio: desktop ? 0.3 : 1, maxWidth: 440, height: 170, topOffset: desktop ? 120 : 128, leftOffset: desktop ? 64 : 20 }), palette.heroGradient, 24),
+    surface("quick_actions", "Быстрые действия", "section", compose("content", desktop ? "topCenter" : "topLeft", "large", { role: "quickActions", widthRatio: desktop ? 0.35 : 1, maxWidth: 520, height: 120, topOffset: desktop ? 120 : 318, leftOffset: 20 }), palette.surface, 20),
+    surface("list_section", "Основной список", "section", compose("content", "bottomCenter", "large", { role: "contentList", width: "full", maxWidth: desktop ? 1312 : 540, heightRatio: desktop ? 0.55 : 0.34, bottomOffset: desktop ? 64 : 98, horizontalPadding: desktop ? 64 : 20, avoid: desktop ? [] : ["bottomControls"] }), palette.surface, 24),
+    ...(desktop ? [] : [surface("bottom_navigation", "Нижняя навигация", "bottomNav", compose("critical", "bottomCenter", "full", { role: "bottomControls", width: "full", height: 84, bottomOffset: 0, horizontalPadding: 0 }), "#FFFFFF", 24)]),
   ];
 }
 
 function profileRecipe(_context: SceneContext, palette: Palette, viewport: InternalDesignModel["metadata"]["viewport"]) {
-  const w = viewport.width;
   return [
     backgroundLayer(palette, viewport),
-    visual("profile_avatar", "image", "Аватар пользователя", { x: w / 2 - 52, y: 96, width: 104, height: 104, zIndex: 3 }, palette.heroGradient, "user avatar portrait matching project visual language"),
-    textElement("profile_user_info", "Информация пользователя", "Имя пользователя", { x: 20, y: 220, width: w - 40, height: 54, zIndex: 4 }, palette.text, 24, 700),
-    surface("profile_settings_list", "Настройки профиля", "section", { x: 20, y: 302, width: w - 40, height: 350, zIndex: 3 }, palette.surface, 24),
-    surface("profile_primary_action", "Основное действие", "button", { x: 20, y: Math.min(viewport.height - 100, 690), width: w - 40, height: 60, zIndex: 4 }, palette.primary, 16),
+    visual("profile_avatar", "image", "Аватар пользователя", compose("content", "topCenter", "medium", { role: "avatar", width: 104, height: 104, topOffset: 96 }), palette.heroGradient, "user avatar portrait matching project visual language", false, { width: 104, height: 104 }),
+    textElement("profile_user_info", "Информация пользователя", "Имя пользователя", compose("critical", "topCenter", "large", { role: "userInfo", width: "full", maxWidth: 540, height: 54, topOffset: 220, horizontalPadding: 20 }), palette.text, 24, 700),
+    surface("profile_settings_list", "Настройки профиля", "section", compose("content", "center", "large", { role: "settingsList", width: "full", maxWidth: 540, heightRatio: 0.42, maxHeight: 380, horizontalPadding: 20 }), palette.surface, 24),
+    surface("profile_primary_action", "Основное действие", "button", compose("critical", "bottomCenter", "large", { role: "primaryAction", width: "full", maxWidth: 540, height: 60, bottomOffset: 40, horizontalPadding: 20, avoid: ["bottomControls"] }), palette.primary, 16),
   ];
 }
 
 function landingRecipe(context: SceneContext, palette: Palette, viewport: InternalDesignModel["metadata"]["viewport"]) {
-  const w = viewport.width;
-  const content = Math.min(1280, w - 128);
-  const left = Math.round((w - content) / 2);
   return [
     backgroundLayer(palette, viewport),
-    surface("website_navigation", "Навигация сайта", "section", { x: 0, y: 0, width: w, height: 88, zIndex: 3 }, palette.surface, 0),
-    logoElement(context.primaryLogo, context.projectName, { x: left, y: 24, width: 160, height: 48, zIndex: 4 }),
-    textElement("hero_headline", "Главный заголовок", context.screenPurpose || `${context.projectName} — новый уровень продукта`, { x: left, y: 210, width: content * 0.48, height: 180, zIndex: 4 }, palette.text, 64, 700),
-    textElement("hero_description", "Описание hero", context.userRequest, { x: left, y: 410, width: content * 0.42, height: 100, zIndex: 4 }, palette.mutedText, 22, 400),
-    surface("hero_primary_cta", "Основная CTA", "button", { x: left, y: 550, width: 220, height: 64, zIndex: 4 }, palette.primary, 16),
-    visual("hero_product_visual", domainVisual(context.projectType, context).type, "Hero product visual", { x: left + content * 0.52, y: 150, width: content * 0.48, height: 520, zIndex: 3 }, palette.heroGradient, domainVisual(context.projectType, context).primary),
-    surface("feature_cards", "Карточки преимуществ", "section", { x: left, y: 760, width: content, height: 420, zIndex: 3 }, palette.surface, 28),
+    surface("website_navigation", "Навигация сайта", "section", compose("critical", "topCenter", "full", { role: "navigation", width: "full", height: 88, topOffset: 0, verticalPadding: 0 }), palette.surface, 0),
+    logoElement(context.primaryLogo, context.projectName, compose("critical", "topLeft", "small", { role: "brandLogo", width: 160, height: 48, topOffset: 20, leftOffset: 64 })),
+    textElement("hero_headline", "Главный заголовок", context.screenPurpose || `${context.projectName} — новый уровень продукта`, compose("critical", "centerLeft", "hero", { role: "headline", widthRatio: 0.42, maxWidth: 600, height: 180, leftOffset: 64, align: "left" }), palette.text, 64, 700),
+    textElement("hero_description", "Описание hero", context.userRequest, compose("critical", "centerLeft", "large", { role: "description", widthRatio: 0.4, maxWidth: 560, height: 100, leftOffset: 64, relationTo: "below:hero_headline", align: "left" }), palette.mutedText, 22, 400),
+    surface("hero_primary_cta", "Основная CTA", "button", compose("critical", "centerLeft", "medium", { role: "primaryAction", width: 220, height: 64, leftOffset: 64, relationTo: "below:hero_description" }), palette.primary, 16),
+    visual("hero_product_visual", domainVisual(context.projectType, context).type, "Hero product visual", compose("content", "centerRight", "hero", { role: "hero", widthRatio: 0.46, maxWidth: 620, maxHeight: 560, rightOffset: 64 }), palette.heroGradient, domainVisual(context.projectType, context).primary, false, { width: 620, height: 520 }),
+    surface("feature_cards", "Карточки преимуществ", "section", compose("content", "topCenter", "large", { role: "features", width: "full", maxWidth: 1312, heightRatio: 0.18, maxHeight: 320, relationTo: "below:hero_product_visual", horizontalPadding: 64 }), palette.surface, 28),
   ];
 }
 
 function backgroundLayer(palette: Palette, viewport: InternalDesignModel["metadata"]["viewport"]) {
-  return visual("screen_background", "background", "Фон экрана", { x: 0, y: 0, width: viewport.width, height: viewport.height, zIndex: 0 }, palette.background, `${palette.visualLanguage}; brand background; no text`, true);
+  return visual("screen_background", "background", "Фон экрана", compose("background", "fullScreen", "full", { role: "background", allowOverflow: "full" }), palette.background, `${palette.visualLanguage}; brand background; no text`, true, { width: viewport.width, height: viewport.height });
 }
 
-function genericDecorations(palette: Palette, viewport: InternalDesignModel["metadata"]["viewport"]) {
+function genericDecorations(palette: Palette) {
   return [
-    visual("background_decoration_left", "decoration", "Фоновый декор слева", { x: -70, y: 100, width: 190, height: 190, zIndex: 1 }, palette.softDecoration, `${palette.visualLanguage}; abstract translucent brand decoration`),
-    visual("background_decoration_right", "decoration", "Фоновый декор справа", { x: viewport.width - 110, y: viewport.height * 0.62, width: 170, height: 170, zIndex: 1 }, palette.softDecorationAlt, "abstract translucent brand decoration"),
+    visual("background_decoration_left", "decoration", "Фоновый декор слева", compose("decorative", "topLeft", "large", { widthRatio: 0.48, maxWidth: 200, topOffset: 90, leftOffset: -60, allowOverflow: "partial" }), palette.softDecoration, `${palette.visualLanguage}; abstract translucent brand decoration`, false, { width: 190, height: 190 }),
+    visual("background_decoration_right", "decoration", "Фоновый декор справа", compose("decorative", "bottomRight", "large", { widthRatio: 0.44, maxWidth: 180, bottomOffset: 150, rightOffset: -54, allowOverflow: "partial" }), palette.softDecorationAlt, "abstract translucent brand decoration", false, { width: 170, height: 170 }),
   ];
 }
 
@@ -198,9 +198,10 @@ function domainVisual(projectType: string, context: SceneContext) {
   };
   if (projectType === "education_app") return {
     type: "illustration" as const, secondaryType: "character" as const,
-    name: "Образовательная среда", secondaryName: "Персонаж учащегося",
-    primary: `friendly learning environment or education product visual; ${style}`,
-    secondary: `friendly learner character appropriate for the target audience; ${style}`,
+    name: hasSchoolContext(context) ? "Школа" : "Образовательная среда",
+    secondaryName: hasSchoolContext(context) ? "Ученик" : "Персонаж учащегося",
+    primary: hasSchoolContext(context) ? `standalone friendly school building; ${style}` : `friendly learning environment or education product visual; ${style}`,
+    secondary: hasSchoolContext(context) ? `friendly student character appropriate for the target audience; ${style}` : `friendly learner character appropriate for the target audience; ${style}`,
   };
   if (projectType === "healthcare_app") return {
     type: "illustration" as const, secondaryType: "decoration" as const,
@@ -220,6 +221,15 @@ function domainVisual(projectType: string, context: SceneContext) {
     primary: `brand-specific product hero visual for ${context.projectName}; ${style}; ${context.styleDna.mood || "modern and confident"}`,
     secondary: `abstract brand object derived from project memory; ${style}`,
   };
+}
+
+function hasSchoolContext(context: SceneContext) {
+  return /edus|school|student|pupil|школ|ученик|учащ/i.test([
+    context.projectName,
+    context.projectMemory,
+    context.userRequest,
+    ...context.projectRules,
+  ].join(" "));
 }
 
 type Palette = ReturnType<typeof paletteFrom>;
@@ -245,10 +255,20 @@ function paletteFrom(style: StyleDna, projectType: string) {
   };
 }
 
-function visual(id: string, type: IdmElement["type"], name: string, layout: Box, background: string, description: string, locked = false): IdmElement {
+function visual(
+  id: string,
+  type: IdmElement["type"],
+  name: string,
+  composition: IdmComposition,
+  background: string,
+  description: string,
+  locked = false,
+  seed?: { width: number; height: number },
+): IdmElement {
   return {
     id, type, name, parent: null, children: [],
-    layout: { ...layout, radius: type === "background" ? 0 : 24, visible: true, locked },
+    layout: unresolvedLayout(type, locked, seed),
+    composition,
     style: { background, opacity: 1 },
     animation: { type: "none", durationMs: 0, curve: "linear", delayMs: 0 },
     constraints: ["editor:rotation=0", "visual-scene-planner"],
@@ -258,8 +278,9 @@ function visual(id: string, type: IdmElement["type"], name: string, layout: Box,
   };
 }
 
-function logoElement(primaryLogo: PrimaryLogo, projectName: string, layout: Box): IdmElement {
-  const element = visual("primary_logo", "image", "Основной логотип", layout, "transparent", primaryLogo ? "uploaded primary logo; place exactly; do not redraw" : "uploaded primary logo required; do not generate");
+function logoElement(primaryLogo: PrimaryLogo, projectName: string, composition: IdmComposition): IdmElement {
+  const ratio = primaryLogo?.width && primaryLogo.height ? primaryLogo.width / primaryLogo.height : 2.5;
+  const element = visual("primary_logo", "image", "Основной логотип", composition, "transparent", primaryLogo ? "uploaded primary logo; place exactly; do not redraw" : "uploaded primary logo required; do not generate", false, { width: 200, height: Math.round(200 / ratio) });
   return {
     ...element,
     semanticRole: "logo",
@@ -268,10 +289,11 @@ function logoElement(primaryLogo: PrimaryLogo, projectName: string, layout: Box)
   };
 }
 
-function textElement(id: string, name: string, text: string, layout: Box, color: string, fontSize: number, fontWeight: number) {
+function textElement(id: string, name: string, text: string, composition: IdmComposition, color: string, fontSize: number, fontWeight: number) {
   const element: IdmElement = {
     id, type: "text", name, parent: null, children: [],
-    layout: { ...layout, align: "center", visible: true, locked: false },
+    layout: { ...unresolvedLayout("text", false, { width: 300, height: 48 }), align: composition.align ?? "center" },
+    composition,
     style: { background: "transparent", color, opacity: 1, typography: "project" },
     animation: { type: "fade", durationMs: 360, curve: "easeOut", delayMs: 120 },
     constraints: [], behavior: [], semanticRole: "text",
@@ -280,10 +302,11 @@ function textElement(id: string, name: string, text: string, layout: Box, color:
   return writeEditorProperties(element, { fontFamily: "project", fontSize, fontWeight, textAlign: "center", rotation: 0 });
 }
 
-function surface(id: string, name: string, type: IdmElement["type"], layout: Box, background: string, radius: number): IdmElement {
+function surface(id: string, name: string, type: IdmElement["type"], composition: IdmComposition, background: string, radius: number, seed?: { width: number; height: number }): IdmElement {
   return {
     id, type, name, parent: null, children: [],
-    layout: { ...layout, radius, visible: true, locked: false },
+    layout: { ...unresolvedLayout(type, false, seed), radius },
+    composition,
     style: { background, opacity: 1 },
     animation: { type: "none", durationMs: 0, curve: "linear", delayMs: 0 },
     constraints: ["visual-scene-planner"], behavior: type === "button" ? ["tap"] : [],
@@ -291,10 +314,11 @@ function surface(id: string, name: string, type: IdmElement["type"], layout: Box
   };
 }
 
-function progressElement(layout: Box, palette: Palette, id = "loading_progress"): IdmElement {
+function progressElement(composition: IdmComposition, palette: Palette, id = "loading_progress"): IdmElement {
   return {
     id, type: "progress", name: "Индикатор прогресса", parent: null, children: [],
-    layout: { ...layout, radius: 999, visible: true, locked: false },
+    layout: { ...unresolvedLayout("progress", false, { width: 200, height: 8 }), radius: 999 },
+    composition,
     style: { background: `linear-gradient(90deg,${palette.primary} 0%,${palette.primary} 42%,#DDE3EF 42%,#DDE3EF 100%)`, color: palette.primary, opacity: 1 },
     animation: { type: "fade", durationMs: 300, curve: "easeOut", delayMs: 250 },
     constraints: [`progress:track=#DDE3EF`, `progress:fill=${palette.primary}`],
@@ -303,9 +327,32 @@ function progressElement(layout: Box, palette: Palette, id = "loading_progress")
   };
 }
 
-type Box = { x: number; y: number; width: number; height: number; zIndex: number };
-function box(x: number, y: number, width: number, height: number, zIndex: number, sx: number, sy: number): Box {
-  return { x: Math.round(x * sx), y: Math.round(y * sy), width: Math.round(width * sx), height: Math.round(height * sy), zIndex };
+function compose(
+  priority: NonNullable<IdmComposition["priority"]>,
+  anchor: NonNullable<IdmComposition["anchor"]>,
+  size: NonNullable<IdmComposition["size"]>,
+  rest: Omit<IdmComposition, "priority" | "anchor" | "size"> = {},
+): IdmComposition {
+  return { priority, anchor, size, allowOverflow: priority === "decorative" ? "partial" : "none", ...rest };
+}
+
+function unresolvedLayout(type: IdmElement["type"], locked: boolean, seed?: { width: number; height: number }) {
+  const defaults = type === "text" ? { width: 280, height: 48 }
+    : type === "progress" ? { width: 200, height: 8 }
+      : type === "button" || type === "input" ? { width: 320, height: 56 }
+        : { width: 180, height: 180 };
+  return {
+    x: 0,
+    y: 0,
+    width: seed?.width ?? defaults.width,
+    height: seed?.height ?? defaults.height,
+    zIndex: 0,
+    radius: type === "background" ? 0 : 24,
+    visible: true,
+    locked,
+    source: "engine" as const,
+    manualOverride: false,
+  };
 }
 
 function createRoot(idm: InternalDesignModel): IdmElement {
@@ -324,6 +371,7 @@ function detectSceneType(context: SceneContext, width: number): SceneType {
   if (context.projectType === "landing_page" || (width >= 1000 && /landing|hero|главн|home/i.test(value))) return "landing";
   if (/login|sign in|вход|авторизац/i.test(value)) return "login";
   if (/onboarding|онбординг|знакомств/i.test(value)) return "onboarding";
+  if (/settings|настройк/i.test(value)) return "settings";
   if (/profile|профил|account/i.test(value)) return "profile";
   if (/dashboard|home|главн|дашборд/i.test(value)) return "home";
   if (/splash|launch|загрузочн|стартов/i.test(value)) return width >= 1000 ? "landing" : "splash";

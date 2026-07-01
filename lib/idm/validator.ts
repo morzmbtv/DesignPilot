@@ -1,5 +1,12 @@
 import { layoutElementTypes } from "@/lib/layout";
-import { IDM_COMPILER_VERSION, type IdmCompilerValidation, type IdmElement, type InternalDesignModel } from "@/lib/idm/types";
+import {
+  IDM_COMPILER_VERSION,
+  type IdmCompilerValidation,
+  type IdmComposition,
+  type IdmElement,
+  type InternalDesignModel,
+  type LayoutEngineDebug,
+} from "@/lib/idm/types";
 
 export function normalizeAndValidateIdm(input: unknown): { idm: InternalDesignModel | null; validation: IdmCompilerValidation } {
   const errors: string[] = [];
@@ -95,6 +102,7 @@ export function normalizeAndValidateIdm(input: unknown): { idm: InternalDesignMo
       minimumTapTarget: numberValue((input as any).accessibility?.minimumTapTarget, 44),
     },
     componentSuggestions: Array.isArray((input as any).componentSuggestions) ? (input as any).componentSuggestions.filter(isRecord).map(normalizeComponentSuggestion) : [],
+    layoutEngine: isRecord((input as any).layoutEngine) ? (input as any).layoutEngine as LayoutEngineDebug : undefined,
     exportMetadata: {
       createdBy: createdByValue((input as any).exportMetadata?.createdBy),
       createdAt: stringValue((input as any).exportMetadata?.createdAt, new Date().toISOString()),
@@ -129,7 +137,10 @@ function normalizeElement(
   const height = Math.max(4, numberValue(layout.height, type === "text" ? 32 : 56));
   const x = numberValue(layout.x, 20);
   const y = numberValue(layout.y, 120 + index * 68);
-  if (x < -20 || y < -20 || x + width > viewport.width + 20 || y + height > viewport.height + 20) warnings.push(`Элемент ${id} выходит за допустимые границы viewport.`);
+  if (type !== "background" && type !== "decoration" &&
+    (x < -20 || y < -20 || x + width > viewport.width + 20 || y + height > viewport.height + 20)) {
+    warnings.push(`Элемент ${id} выходит за допустимые границы viewport и будет исправлен Viewport Normalizer.`);
+  }
   if (!item.style) repaired.push(`Для ${id} добавлен style.`);
   if (!item.animation) repaired.push(`Для ${id} добавлен animation.`);
   if (!item.content) repaired.push(`Для ${id} добавлен content.`);
@@ -149,7 +160,10 @@ function normalizeElement(
       zIndex: numberValue(layout.zIndex, index + 1),
       visible: typeof layout.visible === "boolean" ? layout.visible : true,
       locked: Boolean(layout.locked),
+      source: layout.source === "manual" ? "manual" : layout.source === "engine" ? "engine" : "ai",
+      manualOverride: Boolean(layout.manualOverride),
     },
+    composition: normalizeComposition(item.composition),
     style: {
       background: stringValue(style.background, "transparent"),
       opacity: numberValue(style.opacity, 1),
@@ -183,6 +197,46 @@ function normalizeElement(
       shimmer: Boolean(item.state.shimmer),
     } : {},
   }];
+}
+
+function normalizeComposition(value: unknown): IdmComposition | undefined {
+  if (!isRecord(value)) return undefined;
+  const anchors = ["topLeft", "topCenter", "topRight", "centerLeft", "center", "centerRight", "bottomLeft", "bottomCenter", "bottomRight", "fullScreen"];
+  const sizes = ["tiny", "small", "medium", "large", "hero", "full"];
+  const priorities = ["background", "decorative", "content", "critical"];
+  const overflows = ["none", "partial", "full"];
+  return {
+    role: stringOrUndefined(value.role),
+    anchor: anchors.includes(String(value.anchor)) ? value.anchor as IdmComposition["anchor"] : undefined,
+    size: sizes.includes(String(value.size)) ? value.size as IdmComposition["size"] : undefined,
+    width: dimensionValue(value.width),
+    height: dimensionValue(value.height),
+    widthRatio: optionalNumber(value.widthRatio),
+    heightRatio: optionalNumber(value.heightRatio),
+    maxWidth: optionalNumber(value.maxWidth),
+    maxHeight: optionalNumber(value.maxHeight),
+    minWidth: optionalNumber(value.minWidth),
+    minHeight: optionalNumber(value.minHeight),
+    topOffset: optionalNumber(value.topOffset),
+    bottomOffset: optionalNumber(value.bottomOffset),
+    leftOffset: optionalNumber(value.leftOffset),
+    rightOffset: optionalNumber(value.rightOffset),
+    horizontalPadding: optionalNumber(value.horizontalPadding),
+    verticalPadding: optionalNumber(value.verticalPadding),
+    align: stringOrUndefined(value.align),
+    allowOverflow: overflows.includes(String(value.allowOverflow)) ? value.allowOverflow as IdmComposition["allowOverflow"] : undefined,
+    relationTo: stringOrUndefined(value.relationTo),
+    avoid: Array.isArray(value.avoid) ? value.avoid.map(String) : undefined,
+    priority: priorities.includes(String(value.priority)) ? value.priority as IdmComposition["priority"] : undefined,
+  };
+}
+
+function dimensionValue(value: unknown) {
+  return value === "full" ? "full" as const : optionalNumber(value);
+}
+
+function optionalNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function detectCycles(elements: IdmElement[], errors: string[]) {

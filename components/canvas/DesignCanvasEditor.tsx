@@ -64,8 +64,12 @@ export function DesignCanvasEditor({ projectId, screenId, versionId, versionNumb
 
   function updateElement(next: IdmElement) {
     const oldId = idm.hierarchy.elements.some((element) => element.id === next.id) ? next.id : selectedId;
+    const previous = idm.hierarchy.elements.find((element) => element.id === oldId);
+    const resolvedNext = previous && geometryChanged(previous, next)
+      ? { ...next, layout: { ...next.layout, source: "manual" as const, manualOverride: true } }
+      : next;
     const idChanged = oldId && oldId !== next.id;
-    const idExists = idChanged && idm.hierarchy.elements.some((element) => element.id === next.id);
+    const idExists = idChanged && idm.hierarchy.elements.some((element) => element.id === resolvedNext.id);
     if (idExists) {
       setError(`ID «${next.id}» уже используется.`);
       return;
@@ -75,19 +79,19 @@ export function DesignCanvasEditor({ projectId, screenId, versionId, versionNumb
       hierarchy: {
         ...idm.hierarchy,
         elements: idm.hierarchy.elements.map((element) => {
-          if (element.id === oldId) return next;
+          if (element.id === oldId) return resolvedNext;
           if (!idChanged) return element;
           return {
             ...element,
-            parent: element.parent === oldId ? next.id : element.parent,
-            children: element.children.map((id) => id === oldId ? next.id : id),
+            parent: element.parent === oldId ? resolvedNext.id : element.parent,
+            children: element.children.map((id) => id === oldId ? resolvedNext.id : id),
           };
         }),
       },
-      interactions: idChanged ? idm.interactions.map((item) => item.elementId === oldId ? { ...item, elementId: next.id } : item) : idm.interactions,
-      dataBinding: idChanged ? idm.dataBinding.map((item) => item.elementId === oldId ? { ...item, elementId: next.id } : item) : idm.dataBinding,
+      interactions: idChanged ? idm.interactions.map((item) => item.elementId === oldId ? { ...item, elementId: resolvedNext.id } : item) : idm.interactions,
+      dataBinding: idChanged ? idm.dataBinding.map((item) => item.elementId === oldId ? { ...item, elementId: resolvedNext.id } : item) : idm.dataBinding,
     });
-    if (idChanged) setSelectedId(next.id);
+    if (idChanged) setSelectedId(resolvedNext.id);
   }
 
   function updateById(id: string, updater: (element: IdmElement) => IdmElement) {
@@ -161,7 +165,7 @@ export function DesignCanvasEditor({ projectId, screenId, versionId, versionNumb
       hierarchy: {
         ...idm.hierarchy,
         elements: idm.hierarchy.elements.map((element) => zById.has(element.id)
-          ? { ...element, layout: { ...element.layout, zIndex: zById.get(element.id)! } }
+          ? { ...element, layout: { ...element.layout, zIndex: zById.get(element.id)!, source: "manual", manualOverride: true } }
           : element),
       },
     });
@@ -424,6 +428,14 @@ function collectDescendants(idm: InternalDesignModel, id: string) {
     }
   }
   return result;
+}
+
+function geometryChanged(previous: IdmElement, next: IdmElement) {
+  return previous.layout.x !== next.layout.x ||
+    previous.layout.y !== next.layout.y ||
+    previous.layout.width !== next.layout.width ||
+    previous.layout.height !== next.layout.height ||
+    previous.layout.zIndex !== next.layout.zIndex;
 }
 
 function isLogo(element: IdmElement) {

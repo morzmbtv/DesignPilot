@@ -215,6 +215,8 @@ function ElementFallback({ element }: { element: IdmElement }) {
 }
 
 function isOutside(element: IdmElement, width: number, height: number) {
+  if (element.type === "background" || element.type === "decoration" ||
+    /shadow|glow|blur|декор|тень|свечение/i.test(`${element.semanticRole} ${element.content.assetRole || ""}`)) return false;
   return element.layout.x < 0 || element.layout.y < 0 ||
     element.layout.x + element.layout.width > width ||
     element.layout.y + element.layout.height > height;

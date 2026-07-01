@@ -16,6 +16,8 @@ import { hydrateVisualAssets } from "@/lib/ai/hydrate-visual-assets";
 import { parseStyleDna, resolveViewport } from "@/lib/project-config";
 import { planVisualScene } from "@/lib/idm/visual-scene-planner";
 import { applyViewportToIdm } from "@/lib/idm/viewport";
+import { resolveCompositionLayout } from "@/lib/design-engine/layout-engine";
+import { normalizeLayoutToViewport } from "@/lib/design-engine/viewport-normalizer";
 
 export type GeneratedRule = {
   category: string;
@@ -238,9 +240,21 @@ export async function generateScreenWithAI(
       projectType: project.projectType,
       platform: effectivePlatform,
       styleDna,
+      projectMemory: [project.description, project.targetUsers, project.appGoal, project.styleDirection, project.designRequirements, project.architectureNotes, project.constraints].join("\n"),
+      projectRules: project.rules.map((rule) => `${rule.category}/${rule.name}: ${rule.value}`),
       primaryLogo,
     });
-    const hydration = await hydrateVisualAssets(projectId, screenId, scene.idm);
+    const layoutEngine = resolveCompositionLayout(scene.idm);
+    const viewportNormalization = normalizeLayoutToViewport(layoutEngine.idm, layoutEngine.entries);
+    const resolvedSceneIdm = {
+      ...viewportNormalization.idm,
+      layoutEngine: {
+        viewport: { width: viewport.width, height: viewport.height },
+        entries: viewportNormalization.entries,
+        warnings: [...layoutEngine.warnings, ...viewportNormalization.warnings],
+      },
+    };
+    const hydration = await hydrateVisualAssets(projectId, screenId, resolvedSceneIdm);
     const hydratedCompiled = compileDesignModel(hydration.idm, codeRules);
     const generated = {
       ...parsedGenerated,
@@ -254,7 +268,7 @@ export async function generateScreenWithAI(
       internalDesignModel: hydratedCompiled.idm,
       idmValidation: hydratedCompiled.validation,
       componentSuggestions: hydratedCompiled.componentSuggestions,
-      warnings: [...scene.warnings, ...hydration.warnings],
+      warnings: [...scene.warnings, ...layoutEngine.warnings, ...viewportNormalization.warnings, ...hydration.warnings],
       generatedAssetIds: hydration.generatedAssetIds,
       sceneType: scene.sceneType,
       sceneElementIds: scene.addedElementIds,

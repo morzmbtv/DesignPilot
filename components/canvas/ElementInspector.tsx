@@ -44,6 +44,7 @@ export function ElementInspector({ element, onChange, onRegenerateAsset, onUploa
       </div>
       <div className="max-h-[710px] space-y-5 overflow-y-auto p-4">
         {locked ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800"><strong className="flex items-center gap-2"><Lock size={14} /> Элемент заблокирован</strong><p className="mt-1">Его можно выбрать, но нельзя двигать или менять размер.</p><button type="button" onClick={() => patchLayout({ locked: false })} className="mt-2 inline-flex h-8 items-center gap-1.5 rounded-lg bg-amber-700 px-3 font-bold text-white"><Unlock size={13} /> Разблокировать</button></div> : <button type="button" onClick={() => patchLayout({ locked: true })} className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-bold"><Lock size={13} /> Заблокировать</button>}
+        <CompositionSummary element={element} />
 
         <InspectorSection title="Основное">
           <TextField label="ID" value={element.id} disabled={locked} onChange={(id) => patch({ id })} />
@@ -130,6 +131,7 @@ function DesignerInspector({
         ) : (
           <button type="button" onClick={() => patchLayout({ locked: true })} className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-bold"><Lock size={13} /> Заблокировать</button>
         )}
+        <CompositionSummary element={element} />
 
         {visual ? (
           <>
@@ -237,6 +239,36 @@ function PositionFields({ element, locked, patchLayout }: {
     <NumberField label="Ширина" value={element.layout.width} min={4} disabled={locked} onChange={(width) => patchLayout({ width })} />
     <NumberField label="Высота" value={element.layout.height} min={4} disabled={locked} onChange={(height) => patchLayout({ height })} />
   </InspectorSection>;
+}
+
+function CompositionSummary({ element }: { element: IdmElement }) {
+  if (!element.composition) return null;
+  const rows = [
+    ["Anchor", element.composition.anchor],
+    ["Role", element.composition.role],
+    ["Size", element.composition.size],
+    ["Width ratio", element.composition.widthRatio],
+    ["Height ratio", element.composition.heightRatio],
+    ["Offsets", formatOffsets(element.composition)],
+    ["Overflow", element.composition.allowOverflow],
+    ["Priority", element.composition.priority],
+    ["Layout source", element.layout.manualOverride ? "manual override" : element.layout.source || "engine"],
+  ].filter((row) => row[1] !== undefined && row[1] !== "");
+  return <details className="rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+    <summary className="cursor-pointer text-xs font-black text-blue-900">Composition</summary>
+    <dl className="mt-3 grid grid-cols-[100px_1fr] gap-x-2 gap-y-1 text-[11px]">
+      {rows.map(([label, value]) => <div key={String(label)} className="contents"><dt className="font-bold text-blue-700">{label}</dt><dd className="break-all text-blue-950">{String(value)}</dd></div>)}
+    </dl>
+  </details>;
+}
+
+function formatOffsets(composition: NonNullable<IdmElement["composition"]>) {
+  return [
+    composition.topOffset !== undefined ? `top ${composition.topOffset}` : "",
+    composition.rightOffset !== undefined ? `right ${composition.rightOffset}` : "",
+    composition.bottomOffset !== undefined ? `bottom ${composition.bottomOffset}` : "",
+    composition.leftOffset !== undefined ? `left ${composition.leftOffset}` : "",
+  ].filter(Boolean).join(", ");
 }
 
 function isVisualElement(element: IdmElement) {

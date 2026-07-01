@@ -39,7 +39,8 @@ export function validateLayoutJson(value: unknown): { valid: boolean; errors: st
     const x = Number(element.x), y = Number(element.y), width = Number(element.width), height = Number(element.height);
     if (Number.isFinite(width) && width < 4) errors.push(`elements[${index}].width должен быть не меньше 4`);
     if (Number.isFinite(height) && height < 4) errors.push(`elements[${index}].height должен быть не меньше 4`);
-    if ([x, y, width, height, viewportWidth, viewportHeight].every(Number.isFinite) && (x < -20 || y < -20 || x + width > viewportWidth + 20 || y + height > viewportHeight + 20)) errors.push(`elements[${index}] выходит за допустимые границы viewport`);
+    // Viewport overflow исправляет Smart Viewport Normalizer до компиляции.
+    // Здесь проверяется только структурная валидность чисел и размеров.
   });
   return { valid: errors.length === 0, errors, layout: errors.length ? null : value as LayoutJson };
 }

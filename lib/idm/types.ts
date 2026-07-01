@@ -20,11 +20,43 @@ export type IdmLayout = {
   zIndex?: number;
   visible?: boolean;
   locked?: boolean;
+  source?: "ai" | "engine" | "manual";
+  manualOverride?: boolean;
   autoLayout?: {
     direction?: "row" | "column";
     gap?: number;
     padding?: number;
   };
+};
+
+export type CompositionAnchor =
+  | "topLeft" | "topCenter" | "topRight"
+  | "centerLeft" | "center" | "centerRight"
+  | "bottomLeft" | "bottomCenter" | "bottomRight" | "fullScreen";
+
+export type IdmComposition = {
+  role?: string;
+  anchor?: CompositionAnchor;
+  size?: "tiny" | "small" | "medium" | "large" | "hero" | "full";
+  width?: number | "full";
+  height?: number | "full";
+  widthRatio?: number;
+  heightRatio?: number;
+  maxWidth?: number;
+  maxHeight?: number;
+  minWidth?: number;
+  minHeight?: number;
+  topOffset?: number;
+  bottomOffset?: number;
+  leftOffset?: number;
+  rightOffset?: number;
+  horizontalPadding?: number;
+  verticalPadding?: number;
+  align?: string;
+  allowOverflow?: "none" | "partial" | "full";
+  relationTo?: string;
+  avoid?: string[];
+  priority?: "background" | "decorative" | "content" | "critical";
 };
 
 export type IdmStyle = {
@@ -50,6 +82,7 @@ export type IdmElement = {
   parent: string | null;
   children: string[];
   layout: IdmLayout;
+  composition?: IdmComposition;
   style: IdmStyle;
   animation: IdmAnimation;
   constraints: string[];
@@ -124,12 +157,27 @@ export type InternalDesignModel = {
     usageGuidelines: string;
     accessibilityNotes: string;
   }>;
+  layoutEngine?: LayoutEngineDebug;
   exportMetadata: {
     createdBy: "ai" | "user" | "system";
     createdAt: string;
     changeSummary: string;
     userRequest?: string;
   };
+};
+
+export type LayoutEngineDebugEntry = {
+  elementId: string;
+  composition: IdmComposition | null;
+  resolvedLayout: IdmLayout;
+  normalizationChanges: string[];
+  warnings: string[];
+};
+
+export type LayoutEngineDebug = {
+  viewport: { width: number; height: number };
+  entries: LayoutEngineDebugEntry[];
+  warnings: string[];
 };
 
 export type IdmCompilerValidation = {

@@ -34,6 +34,10 @@ export function AiPromptDebugger({
   const sentLayout = findLayout(promptMessages);
   const receivedLayout = parsedResponse?.updatedLayoutJson ?? parsedResponse?.layoutJson ?? parsedResponse?.parsedJson?.layoutJson ?? null;
   const validation = normalizeValidation(parsedResponse);
+  const layoutEngine = parsedResponse?.internalDesignModel?.layoutEngine ??
+    parsedResponse?.parsedJson?.internalDesignModel?.layoutEngine ??
+    parsedResponse?.parsedJson?.layoutEngine ??
+    null;
 
   async function copy(value: string, key: string) {
     await navigator.clipboard.writeText(value);
@@ -97,6 +101,14 @@ export function AiPromptDebugger({
             <DebugCode label="Tokens" value={prettyJson(log.tokensJson ?? null)} />
             <DebugCode label="layoutJson, отправленный в AI" value={sentLayout ? JSON.stringify(sentLayout, null, 2) : "—"} />
             <DebugCode label="updatedLayoutJson / layoutJson, полученный от AI" value={receivedLayout ? JSON.stringify(receivedLayout, null, 2) : "—"} />
+            <DebugCode label="Layout Engine · input composition" value={layoutEngine ? JSON.stringify(layoutEngine.entries?.map((entry: any) => ({ elementId: entry.elementId, composition: entry.composition })), null, 2) : "—"} />
+            <DebugCode label="Layout Engine · resolved layout" value={layoutEngine ? JSON.stringify(layoutEngine.entries?.map((entry: any) => ({ elementId: entry.elementId, layout: entry.resolvedLayout })), null, 2) : "—"} />
+            <DebugCode label="Viewport Normalization" value={layoutEngine ? JSON.stringify(layoutEngine.entries?.map((entry: any) => ({
+              elementId: entry.elementId,
+              changes: entry.normalizationChanges ?? [],
+              notes: entry.warnings ?? [],
+            })), null, 2) : "—"} />
+            <DebugCode label="Layout Engine · warnings" value={layoutEngine ? JSON.stringify(layoutEngine.warnings ?? [], null, 2) : "—"} />
 
             {artifacts ? (
               <>

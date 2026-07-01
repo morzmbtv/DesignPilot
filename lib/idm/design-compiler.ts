@@ -8,6 +8,8 @@ import { generateLayoutFromIdm } from "@/lib/idm/layout-generator";
 import { normalizeAndValidateIdm } from "@/lib/idm/validator";
 import type { CompiledDesignArtifacts, InternalDesignModel } from "@/lib/idm/types";
 import { validateLayoutJson } from "@/lib/layout";
+import { resolveCompositionLayout } from "@/lib/design-engine/layout-engine";
+import { normalizeLayoutToViewport } from "@/lib/design-engine/viewport-normalizer";
 
 type ProjectRule = { category: string; name: string; value: string };
 
@@ -19,8 +21,24 @@ export class DesignCompilerError extends Error {
 }
 
 export function compileDesignModel(input: unknown, projectRules: ProjectRule[] = []): CompiledDesignArtifacts {
-  const { idm, validation } = normalizeAndValidateIdm(input);
-  if (!idm) throw new DesignCompilerError("IDM не прошёл базовую проверку.", validation.errors);
+  const initial = normalizeAndValidateIdm(input);
+  if (!initial.idm) throw new DesignCompilerError("IDM не прошёл базовую проверку.", initial.validation.errors);
+  const engine = resolveCompositionLayout(initial.idm);
+  const normalized = normalizeLayoutToViewport(engine.idm, engine.entries);
+  const layoutEngine = {
+    viewport: { width: initial.idm.metadata.viewport.width, height: initial.idm.metadata.viewport.height },
+    entries: normalized.entries,
+    warnings: [...engine.warnings, ...normalized.warnings],
+  };
+  const final = normalizeAndValidateIdm({ ...normalized.idm, layoutEngine });
+  if (!final.idm) throw new DesignCompilerError("IDM не прошёл проверку после Layout Engine.", final.validation.errors);
+  const idm = final.idm;
+  const validation = {
+    ok: initial.validation.errors.length === 0 && final.validation.errors.length === 0,
+    errors: unique([...initial.validation.errors, ...final.validation.errors]),
+    warnings: unique([...initial.validation.warnings, ...final.validation.warnings, ...layoutEngine.warnings]),
+    repaired: unique([...initial.validation.repaired, ...final.validation.repaired]),
+  };
   const layoutJson = generateLayoutFromIdm(idm);
   const layoutValidation = validateLayoutJson(layoutJson);
   const mergedValidation = {
@@ -70,4 +88,8 @@ export function compileDesignModel(input: unknown, projectRules: ProjectRule[] =
 
 export function stringifyIdm(idm: InternalDesignModel) {
   return JSON.stringify(idm, null, 2);
+}
+
+function unique(values: string[]) {
+  return Array.from(new Set(values));
 }
