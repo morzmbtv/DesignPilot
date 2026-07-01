@@ -4,12 +4,15 @@ import { CheckCircle2, Code2, Grid3X3, Hand, Minus, Plus, Redo2, Save, Undo2, Zo
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { saveCanvasIdmVersion } from "@/app/projects/[id]/screens/[screenId]/layout-actions";
+import { generateProjectAsset, uploadProjectAsset } from "@/app/projects/[id]/assets/actions";
 import { ElementInspector } from "@/components/canvas/ElementInspector";
 import { IdmCanvas } from "@/components/canvas/IdmCanvas";
 import { LayersPanel } from "@/components/canvas/LayersPanel";
+import { ModeOnly } from "@/components/interface-mode";
 import { generateCssLayout } from "@/lib/design-code/css-layout-generator";
 import { compileDesignModel } from "@/lib/idm/design-compiler";
 import type { IdmElement, InternalDesignModel } from "@/lib/idm/types";
+import type { ProjectAssetType } from "@/lib/assets";
 
 type Props = {
   projectId: string;
@@ -27,7 +30,7 @@ export function DesignCanvasEditor({ projectId, screenId, versionId, versionNumb
   const [history, setHistory] = useState<InternalDesignModel[]>([]);
   const [future, setFuture] = useState<InternalDesignModel[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(firstElementId(initialIdm));
-  const [zoom, setZoom] = useState(0.75);
+  const [zoom, setZoom] = useState(() => initialIdm.metadata.viewport.height > 1600 ? 0.22 : initialIdm.metadata.viewport.width > 900 ? 0.45 : 0.75);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [snap, setSnap] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
@@ -35,6 +38,7 @@ export function DesignCanvasEditor({ projectId, screenId, versionId, versionNumb
   const [showRulers, setShowRulers] = useState(true);
   const [panMode, setPanMode] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [assetBusy, setAssetBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -222,18 +226,88 @@ export function DesignCanvasEditor({ projectId, screenId, versionId, versionNumb
     router.refresh();
   }
 
+  async function regenerateAsset(element: IdmElement, description: string) {
+    if (isLogo(element)) {
+      setError("Логотип нельзя перегенерировать. Загрузите или выберите готовый логотип.");
+      return;
+    }
+    setAssetBusy(true);
+    setError("");
+    setMessage("Генерируются изображения");
+    const result = await generateProjectAsset(projectId, {
+      name: element.name,
+      type: assetTypeForElement(element),
+      description: description.trim() || element.content.alt || element.content.text || element.name,
+      useProjectStyle: true,
+      screenId,
+    });
+    setAssetBusy(false);
+    if (!result.ok || !result.assetId) {
+      setMessage("");
+      setError(result.ok ? "Ассет не был создан." : result.error);
+      return;
+    }
+    updateElementWithId(element.id, {
+      ...element,
+      content: {
+        ...element.content,
+        alt: description.trim() || element.content.alt || element.name,
+        assetRef: result.assetId,
+        assetRole: assetTypeForElement(element),
+      },
+    });
+    setMessage("Ассет создан. Сохраните новую версию.");
+    router.refresh();
+  }
+
+  async function uploadAsset(element: IdmElement, file: File) {
+    setAssetBusy(true);
+    setError("");
+    setMessage("Загружается изображение");
+    const data = new FormData();
+    data.set("file", file);
+    data.set("name", file.name);
+    data.set("type", isLogo(element) ? "logo" : assetTypeForElement(element));
+    if (isLogo(element)) data.set("isPrimaryLogo", "on");
+    const result = await uploadProjectAsset(projectId, data);
+    setAssetBusy(false);
+    if (!result.ok || !result.assetId) {
+      setMessage("");
+      setError(result.ok ? "Ассет не был загружен." : result.error);
+      return;
+    }
+    updateElementWithId(element.id, {
+      ...element,
+      content: {
+        ...element.content,
+        assetRef: result.assetId,
+        assetRole: isLogo(element) ? "primaryLogo" : assetTypeForElement(element),
+      },
+    });
+    setMessage("Ассет создан. Сохраните новую версию.");
+    router.refresh();
+  }
+
+  const editorStatus = assetBusy
+    ? "Генерируются изображения"
+    : message.startsWith("Новая версия")
+      ? "Сохранено как новая версия"
+      : changed
+        ? "Есть несохранённые изменения"
+        : "Готово";
+
   return (
     <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <header className="flex flex-col gap-3 border-b border-slate-200 bg-white px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.12em] text-violet">Визуальный редактор · версия {versionNumber}</p>
-          <h2 className="mt-1 text-lg font-black">Canvas 390 × 844</h2>
+          <h2 className="mt-1 text-lg font-black">Canvas {idm.metadata.viewport.width} × {idm.metadata.viewport.height}</h2>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <ToolButton label="Отменить" disabled={!history.length} onClick={undo}><Undo2 size={15} /></ToolButton>
           <ToolButton label="Повторить" disabled={!future.length} onClick={redo}><Redo2 size={15} /></ToolButton>
           <span className="mx-1 h-6 w-px bg-slate-200" />
-          <ToolButton label="Уменьшить" onClick={() => setZoom((value) => Math.max(0.35, value - 0.1))}><ZoomOut size={15} /></ToolButton>
+          <ToolButton label="Уменьшить" onClick={() => setZoom((value) => Math.max(0.15, value - 0.1))}><ZoomOut size={15} /></ToolButton>
           <span className="min-w-14 text-center text-xs font-bold">{Math.round(zoom * 100)}%</span>
           <ToolButton label="Увеличить" onClick={() => setZoom((value) => Math.min(1.5, value + 0.1))}><ZoomIn size={15} /></ToolButton>
           <ToolButton label="Перемещение холста" active={panMode} onClick={() => setPanMode((value) => !value)}><Hand size={15} /></ToolButton>
@@ -249,9 +323,9 @@ export function DesignCanvasEditor({ projectId, screenId, versionId, versionNumb
         <Toggle label="Привязка 4 px" checked={snap} onChange={setSnap} />
         <Toggle label="Safe Area" checked={showSafeArea} onChange={setShowSafeArea} />
         <Toggle label="Линейки" checked={showRulers} onChange={setShowRulers} />
-        <span className={`ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-bold ${compiled.value ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>
+        <span className={`ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-bold ${compiled.value && !changed ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>
           {compiled.value ? <CheckCircle2 size={13} /> : <Code2 size={13} />}
-          {compiled.value ? "Всё синхронизировано" : "Требуется пересборка"}
+          {editorStatus}
         </span>
       </div>
       {message ? <p className="m-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{message}</p> : null}
@@ -285,10 +359,18 @@ export function DesignCanvasEditor({ projectId, screenId, versionId, versionNumb
           onChange={updateElement}
           assets={assets}
         />
-        <ElementInspector element={selected} onChange={updateElement} assets={assets} projectId={projectId} />
+        <ElementInspector
+          element={selected}
+          onChange={updateElement}
+          onRegenerateAsset={regenerateAsset}
+          onUploadAsset={uploadAsset}
+          assetBusy={assetBusy}
+          assets={assets}
+          projectId={projectId}
+        />
       </div>
 
-      <details className="border-t border-slate-200 bg-white">
+      <ModeOnly mode="expert"><details className="border-t border-slate-200 bg-white">
         <summary className="cursor-pointer px-4 py-3 text-xs font-black text-slate-600">Производные представления (обновляются автоматически)</summary>
         {compiled.value ? (
           <div className="grid gap-3 p-4 lg:grid-cols-2">
@@ -301,7 +383,7 @@ export function DesignCanvasEditor({ projectId, screenId, versionId, versionNumb
             <Artifact title="Animation Spec" value={compiled.value.animationSpec} />
           </div>
         ) : null}
-      </details>
+      </details></ModeOnly>
     </section>
   );
 }
@@ -342,4 +424,17 @@ function collectDescendants(idm: InternalDesignModel, id: string) {
     }
   }
   return result;
+}
+
+function isLogo(element: IdmElement) {
+  return element.semanticRole === "logo" || element.content.assetRole === "primaryLogo" || /logo|логотип/i.test(`${element.id} ${element.name}`);
+}
+
+function assetTypeForElement(element: IdmElement): ProjectAssetType {
+  if (element.type === "background") return "background";
+  if (element.type === "decoration") return "decoration";
+  if (element.type === "character") return "character";
+  if (element.type === "icon") return "icon";
+  if (element.type === "illustration") return "illustration";
+  return "photo";
 }

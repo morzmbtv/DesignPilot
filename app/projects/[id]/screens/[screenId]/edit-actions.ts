@@ -13,6 +13,7 @@ import { createIdmFromLegacy } from "@/lib/idm/legacy-converter";
 import { reconcileAiEditedIdm } from "@/lib/idm/reconcile-ai-edit";
 import type { InternalDesignModel } from "@/lib/idm/types";
 import { sanitizeAssetReferences } from "@/lib/idm/primary-logo";
+import { parseStyleDna, resolveViewport } from "@/lib/project-config";
 
 export type SuggestedRule = {
   category: string;
@@ -60,7 +61,7 @@ export async function editCurrentScreenVersion(
       project: {
         include: {
           rules: { orderBy: [{ category: "asc" }, { createdAt: "asc" }] },
-          projectAssets: { select: { id: true, name: true, isPrimaryLogo: true } },
+          projectAssets: { select: { id: true, name: true, type: true, isPrimaryLogo: true, isBrandAsset: true } },
         },
       },
     },
@@ -71,6 +72,14 @@ export async function editCurrentScreenVersion(
   if (!latestVersion) {
     return { ok: false, error: "Сначала создайте первую версию экрана через AI Generate." };
   }
+  const effectivePlatform = screen.platform !== "inherit" ? screen.platform : screen.project.platform;
+  const effectivePreset = screen.viewportPreset !== "inherit" ? screen.viewportPreset : screen.project.viewportPreset;
+  const viewport = resolveViewport({
+    platform: effectivePlatform,
+    viewportPreset: effectivePreset,
+    customViewportWidth: screen.viewportPreset === "custom" ? screen.customViewportWidth : screen.project.customViewportWidth,
+    customViewportHeight: screen.viewportPreset === "custom" ? screen.customViewportHeight : screen.project.customViewportHeight,
+  });
   const currentLayout = latestVersion.layoutJson ? validateLayoutJson(JSON.parse(latestVersion.layoutJson)).layout : null;
   const lockedElements = currentLayout?.elements.filter((element) => element.locked) ?? [];
   const lockedIntent = detectsLockedEdit(request) && lockedElements.length > 0;
@@ -81,6 +90,10 @@ export async function editCurrentScreenVersion(
   const context: ScreenEditPromptContext = {
     project: {
       name: screen.project.name,
+      type: screen.project.projectType,
+      platform: effectivePlatform,
+      styleDna: parseStyleDna(screen.project.styleDna),
+      viewport: { width: viewport.width, height: viewport.height, preset: viewport.preset },
       styleDirection: screen.project.styleDirection,
       designRequirements: screen.project.designRequirements,
       constraints: screen.project.constraints,
@@ -120,6 +133,7 @@ export async function editCurrentScreenVersion(
     },
     assets: {
       primaryLogo: screen.project.projectAssets.find((asset) => asset.isPrimaryLogo) ?? null,
+      available: screen.project.projectAssets.map(({ id, name, type, isPrimaryLogo, isBrandAsset }) => ({ id, name, type, isPrimaryLogo, isBrandAsset })),
     },
   };
 

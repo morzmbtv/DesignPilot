@@ -80,14 +80,18 @@ export async function deleteProjectAsset(projectId: string, assetId: string): Pr
 }
 
 export async function generateProjectAsset(projectId: string, input: {
-  name: string; type: string; description: string; useProjectStyle: boolean;
+  name: string; type: string; description: string; useProjectStyle: boolean; screenId?: string;
 }): Promise<ActionResult> {
   if (!isProjectAssetType(input.type)) return { ok: false, error: "Некорректный тип ассета." };
   if (!input.description.trim()) return { ok: false, error: "Опишите ассет, который нужно создать." };
+  const user = await requireUser();
+  await assertProjectAccess(projectId, user.id);
+  if (input.screenId) await assertScreenAccess(input.screenId, user.id);
   try {
     const asset = await generateImageAsset(projectId, input.description, input.type, {
       name: input.name,
       useProjectStyle: input.useProjectStyle,
+      screenId: input.screenId,
     });
     revalidateAssets(projectId);
     return { ok: true, message: "Ассет сгенерирован.", assetId: asset.id };

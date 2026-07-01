@@ -12,11 +12,12 @@ export function normalizeAndValidateIdm(input: unknown): { idm: InternalDesignMo
   const rawElements = Array.isArray(hierarchy.elements) ? hierarchy.elements : [];
   const screenName = stringValue(metadata.screenName, "Screen");
   const rootId = stringValue(hierarchy.rootId, "screen_root");
+  const viewport = normalizeViewport(metadata.viewport, repaired);
   if (!input.metadata) repaired.push("Добавлен metadata.");
   if (!input.hierarchy) repaired.push("Добавлен hierarchy.");
   if (!rawElements.length) warnings.push("IDM не содержит элементов; добавлен root screen.");
 
-  const elements = rawElements.flatMap((item, index) => normalizeElement(item, index, rootId, errors, warnings, repaired));
+  const elements = rawElements.flatMap((item, index) => normalizeElement(item, index, rootId, viewport, errors, warnings, repaired));
   if (!elements.some((element) => element.id === rootId)) {
     elements.unshift({
       id: rootId,
@@ -24,10 +25,10 @@ export function normalizeAndValidateIdm(input: unknown): { idm: InternalDesignMo
       name: screenName,
       parent: null,
       children: elements.map((element) => element.id),
-      layout: { x: 0, y: 0, width: 390, height: 844, visible: true, zIndex: 0 },
+      layout: { x: 0, y: 0, width: viewport.width, height: viewport.height, visible: true, zIndex: 0 },
       style: { background: "#FFFFFF", opacity: 1 },
       animation: defaultAnimation(),
-      constraints: ["viewport:390x844"],
+      constraints: [`viewport:${viewport.width}x${viewport.height}`],
       behavior: [],
       semanticRole: "screen",
       content: { text: screenName },
@@ -62,8 +63,8 @@ export function normalizeAndValidateIdm(input: unknown): { idm: InternalDesignMo
       screenName,
       project: stringValue(metadata.project, "DesignPilot Project"),
       version: numberValue(metadata.version, 1),
-      viewport: normalizeViewport(metadata.viewport, repaired),
-      platform: stringValue(metadata.platform, "iOS и Android"),
+      viewport,
+      platform: stringValue(metadata.platform, "ios"),
       source: sourceValue(metadata.source),
       compilerVersion: IDM_COMPILER_VERSION,
     },
@@ -105,7 +106,15 @@ export function normalizeAndValidateIdm(input: unknown): { idm: InternalDesignMo
   return { idm, validation: { ok: errors.length === 0, errors, warnings, repaired } };
 }
 
-function normalizeElement(item: unknown, index: number, rootId: string, errors: string[], warnings: string[], repaired: string[]): IdmElement[] {
+function normalizeElement(
+  item: unknown,
+  index: number,
+  rootId: string,
+  viewport: { width: number; height: number },
+  errors: string[],
+  warnings: string[],
+  repaired: string[],
+): IdmElement[] {
   if (!isRecord(item)) {
     errors.push(`hierarchy.elements[${index}] должен быть объектом.`);
     return [];
@@ -120,7 +129,7 @@ function normalizeElement(item: unknown, index: number, rootId: string, errors: 
   const height = Math.max(4, numberValue(layout.height, type === "text" ? 32 : 56));
   const x = numberValue(layout.x, 20);
   const y = numberValue(layout.y, 120 + index * 68);
-  if (x < -20 || y < -20 || x + width > 410 || y + height > 864) warnings.push(`Элемент ${id} выходит за допустимые границы viewport.`);
+  if (x < -20 || y < -20 || x + width > viewport.width + 20 || y + height > viewport.height + 20) warnings.push(`Элемент ${id} выходит за допустимые границы viewport.`);
   if (!item.style) repaired.push(`Для ${id} добавлен style.`);
   if (!item.animation) repaired.push(`Для ${id} добавлен animation.`);
   if (!item.content) repaired.push(`Для ${id} добавлен content.`);
@@ -194,14 +203,21 @@ function detectCycles(elements: IdmElement[], errors: string[]) {
 
 function normalizeViewport(value: unknown, repaired: string[]) {
   const viewport = isRecord(value) ? value : {};
-  if (viewport.width !== 390 || viewport.height !== 844) repaired.push("Viewport нормализован до 390×844.");
+  const width = boundedNumber(viewport.width, 390, 240, 5000);
+  const height = boundedNumber(viewport.height, 844, 320, 10000);
+  if (viewport.width !== width || viewport.height !== height) repaired.push(`Viewport нормализован до ${width}×${height}.`);
   return {
-    width: 390 as const,
-    height: 844 as const,
+    width,
+    height,
     safeAreaTop: numberValue(viewport.safeAreaTop, 44),
     pagePadding: numberValue(viewport.pagePadding, 20),
     bottomNavArea: typeof viewport.bottomNavArea === "number" ? viewport.bottomNavArea : undefined,
   };
+}
+
+function boundedNumber(value: unknown, fallback: number, min: number, max: number) {
+  const number = numberValue(value, fallback);
+  return Math.min(max, Math.max(min, number));
 }
 
 function normalizeAnimation(value: unknown, repaired: string[]) {
@@ -248,6 +264,9 @@ function defaultSemanticRole(type: string) {
   if (type === "input") return "input";
   if (type === "bottomNav") return "navigation";
   if (type === "text") return "text";
+  if (type === "background") return "background";
+  if (type === "decoration") return "decoration";
+  if (type === "character") return "character";
   return "group";
 }
 

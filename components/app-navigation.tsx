@@ -54,14 +54,13 @@ export function AppNavigation({
       disabled: !projectId,
       active: Boolean(projectId && pathname.includes(`/projects/${projectId}/memory`) && hash === "#project-rules"),
     },
-    {
+    ...(mode === "expert" ? [{
       href: projectId ? `/projects/${projectId}/ai-logs` : "/",
-      label: "Журнал",
+      label: "Журнал AI",
       icon: FileClock,
       disabled: !projectId,
       active: Boolean(projectId && pathname.includes(`/projects/${projectId}/ai-logs`)),
-    },
-    ...(mode === "expert" ? [{
+    }, {
       href: projectId ? `/projects/${projectId}/decisions` : "/",
       label: "Решения",
       icon: Scale,

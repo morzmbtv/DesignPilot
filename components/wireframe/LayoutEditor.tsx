@@ -174,7 +174,7 @@ function CodePanel({ title, value, editing = false, onChange, onCopy, onRefresh,
   </div>;
 }
 function pretty(value: string) { try { return JSON.stringify(JSON.parse(value), null, 2); } catch { return value; } }
-const elementTypeLabels: Record<LayoutElement["type"], string> = { text: "Текст", card: "Карточка", button: "Кнопка", icon: "Иконка", avatar: "Аватар", image: "Изображение", illustration: "Иллюстрация", bottomNav: "Нижняя навигация", section: "Секция", input: "Поле ввода", chip: "Метка", badge: "Бейдж", progress: "Индикатор" };
+const elementTypeLabels: Record<LayoutElement["type"], string> = { text: "Текст", card: "Карточка", button: "Кнопка", icon: "Иконка", avatar: "Аватар", image: "Изображение", illustration: "Иллюстрация", background: "Фон", decoration: "Декор", character: "Персонаж", bottomNav: "Нижняя навигация", section: "Секция", input: "Поле ввода", chip: "Метка", badge: "Бейдж", progress: "Индикатор" };
 function lockedElementChanges(current: LayoutJson, next: LayoutJson) {
   return current.elements.filter((element) => {
     if (!element.locked) return false;

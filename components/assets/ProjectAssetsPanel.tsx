@@ -93,7 +93,7 @@ export function ProjectAssetsPanel({ projectId, initialAssets, screens, imageMod
         <form onSubmit={upload} className="rounded-[22px] border border-line bg-white p-6">
           <div className="flex items-center gap-3"><Upload className="text-violet" /><div><h2 className="text-xl font-black">Загрузить ассет</h2><p className="text-xs text-muted">PNG, JPG, WEBP или SVG · максимум 4 МБ</p></div></div>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <Field label="Название"><input name="name" placeholder="Логотип EDUS" className="asset-input" /></Field>
+            <Field label="Название"><input name="name" placeholder="Логотип бренда" className="asset-input" /></Field>
             <Field label="Тип"><AssetTypeSelect name="type" /></Field>
             <Field label="Файл" wide><input name="file" type="file" required accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml" className="asset-input file:mr-3 file:rounded-lg file:border-0 file:bg-violet/10 file:px-3 file:py-2 file:text-xs file:font-bold file:text-violet" /></Field>
             <label className="flex items-center gap-2 text-sm font-bold"><input name="isBrandAsset" type="checkbox" /> Брендовый ассет</label>

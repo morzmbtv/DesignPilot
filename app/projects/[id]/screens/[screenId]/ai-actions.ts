@@ -13,6 +13,9 @@ import { AiJsonRecoveryError, recoverJson, throwJsonRecoveryError } from "@/lib/
 import { compileDesignModel, DesignCompilerError } from "@/lib/idm/design-compiler";
 import { applyPrimaryLogoPolicy, sanitizeAssetReferences } from "@/lib/idm/primary-logo";
 import { hydrateVisualAssets } from "@/lib/ai/hydrate-visual-assets";
+import { parseStyleDna, resolveViewport } from "@/lib/project-config";
+import { planVisualScene } from "@/lib/idm/visual-scene-planner";
+import { applyViewportToIdm } from "@/lib/idm/viewport";
 
 export type GeneratedRule = {
   category: string;
@@ -66,6 +69,8 @@ export type GenerateScreenResult =
       changeSummary: string;
       warnings: string[];
       generatedAssetIds: string[];
+      sceneType: string;
+      sceneElementIds: string[];
     }
   | {
       ok: false;
@@ -102,7 +107,7 @@ export async function generateScreenWithAI(
           rules: { orderBy: [{ category: "asc" }, { createdAt: "asc" }] },
           designComponents: { where: { approved: true }, orderBy: { usageCount: "desc" }, take: 100 },
           designTokens: { orderBy: [{ group: "asc" }, { name: "asc" }] },
-          projectAssets: { select: { id: true, name: true, width: true, height: true, isPrimaryLogo: true } },
+          projectAssets: { select: { id: true, name: true, type: true, width: true, height: true, isPrimaryLogo: true, isBrandAsset: true } },
           screens: {
             orderBy: { createdAt: "asc" },
             include: {
@@ -118,17 +123,30 @@ export async function generateScreenWithAI(
   if (!screen) return { ok: false, error: "Экран или проект не найден." };
 
   const { project } = screen;
+  const styleDna = parseStyleDna(project.styleDna);
+  const effectivePlatform = screen.platform !== "inherit" ? screen.platform : project.platform;
+  const effectivePreset = screen.viewportPreset !== "inherit" ? screen.viewportPreset : project.viewportPreset;
+  const viewport = resolveViewport({
+    platform: effectivePlatform,
+    viewportPreset: effectivePreset,
+    customViewportWidth: screen.viewportPreset === "custom" ? screen.customViewportWidth : project.customViewportWidth,
+    customViewportHeight: screen.viewportPreset === "custom" ? screen.customViewportHeight : project.customViewportHeight,
+  });
+  const primaryLogo = project.projectAssets.find((asset) => asset.isPrimaryLogo) ?? null;
   const context: ScreenGenerationPromptContext = {
     project: {
       name: project.name,
+      type: project.projectType,
       description: project.description,
       targetUsers: project.targetUsers,
       appGoal: project.appGoal,
-      platform: project.platform,
+      platform: effectivePlatform,
       styleDirection: project.styleDirection,
       designRequirements: project.designRequirements,
       architectureNotes: project.architectureNotes,
       constraints: project.constraints,
+      styleDna,
+      viewport: { width: viewport.width, height: viewport.height, preset: viewport.preset },
     },
     projectRules: project.rules.map(({ category, name, value, source }) => ({
       category,
@@ -140,6 +158,7 @@ export async function generateScreenWithAI(
       name: screen.name,
       purpose: screen.purpose,
       status: screen.status,
+      platform: effectivePlatform,
       latestVersion: screen.versions[0]
         ? {
             versionNumber: screen.versions[0].versionNumber,
@@ -183,10 +202,8 @@ export async function generateScreenWithAI(
       tokens: project.designTokens.map(({ group, name, value }) => ({ group, name, value })),
     },
     assets: {
-      primaryLogo: project.projectAssets.find((asset) => asset.isPrimaryLogo) ? {
-        id: project.projectAssets.find((asset) => asset.isPrimaryLogo)!.id,
-        name: project.projectAssets.find((asset) => asset.isPrimaryLogo)!.name,
-      } : null,
+      primaryLogo: primaryLogo ? { id: primaryLogo.id, name: primaryLogo.name } : null,
+      available: project.projectAssets.map(({ id, name, type, isPrimaryLogo, isBrandAsset }) => ({ id, name, type, isPrimaryLogo, isBrandAsset })),
     },
   };
 
@@ -208,11 +225,22 @@ export async function generateScreenWithAI(
     const parsedGenerated = parseGeneratedScreen(
       tracked.text,
       codeRules,
-      project.projectAssets.find((asset) => asset.isPrimaryLogo) ?? null,
+      primaryLogo,
       project.projectAssets.map((asset) => asset.id),
       /splash|логотип|logo/i.test(`${screen.name} ${screen.purpose} ${request}`),
     );
-    const hydration = await hydrateVisualAssets(projectId, screenId, parsedGenerated.internalDesignModel);
+    const viewportIdm = applyViewportToIdm(parsedGenerated.internalDesignModel, viewport, effectivePlatform);
+    const scene = planVisualScene(viewportIdm, {
+      screenName: screen.name,
+      screenPurpose: screen.purpose,
+      userRequest: request,
+      projectName: project.name,
+      projectType: project.projectType,
+      platform: effectivePlatform,
+      styleDna,
+      primaryLogo,
+    });
+    const hydration = await hydrateVisualAssets(projectId, screenId, scene.idm);
     const hydratedCompiled = compileDesignModel(hydration.idm, codeRules);
     const generated = {
       ...parsedGenerated,
@@ -226,8 +254,10 @@ export async function generateScreenWithAI(
       internalDesignModel: hydratedCompiled.idm,
       idmValidation: hydratedCompiled.validation,
       componentSuggestions: hydratedCompiled.componentSuggestions,
-      warnings: hydration.warnings,
+      warnings: [...scene.warnings, ...hydration.warnings],
       generatedAssetIds: hydration.generatedAssetIds,
+      sceneType: scene.sceneType,
+      sceneElementIds: scene.addedElementIds,
     };
     const usedAssetIds = Array.from(new Set(generated.internalDesignModel.hierarchy.elements.flatMap((element) => element.content.assetRef ? [element.content.assetRef] : [])));
     const version = await prisma.$transaction(async (tx) => {
@@ -340,7 +370,7 @@ export async function previewScreenAiContext(
       project: {
         include: {
           rules: { orderBy: [{ category: "asc" }, { createdAt: "asc" }] },
-          projectAssets: { where: { isPrimaryLogo: true }, take: 1, select: { id: true, name: true } },
+          projectAssets: { select: { id: true, name: true, type: true, isPrimaryLogo: true, isBrandAsset: true } },
           screens: {
             orderBy: { createdAt: "asc" },
             include: {
@@ -354,14 +384,24 @@ export async function previewScreenAiContext(
   });
   if (!screen) return { ok: false, error: "Экран или проект не найден." };
   const project = screen.project;
+  const previewPlatform = screen.platform !== "inherit" ? screen.platform : project.platform;
+  const previewViewport = resolveViewport({
+    platform: previewPlatform,
+    viewportPreset: screen.viewportPreset !== "inherit" ? screen.viewportPreset : project.viewportPreset,
+    customViewportWidth: screen.viewportPreset === "custom" ? screen.customViewportWidth : project.customViewportWidth,
+    customViewportHeight: screen.viewportPreset === "custom" ? screen.customViewportHeight : project.customViewportHeight,
+  });
   const approved = project.screens.filter((item) => item.status === "approved" && item.approvedVersion);
   const rawContext = {
     projectMemory: {
       name: project.name,
+      projectType: project.projectType,
       description: project.description,
       targetUsers: project.targetUsers,
       appGoal: project.appGoal,
-      platform: project.platform,
+      platform: previewPlatform,
+      viewport: previewViewport,
+      styleDna: parseStyleDna(project.styleDna),
       styleDirection: project.styleDirection,
       designRequirements: project.designRequirements,
       architectureNotes: project.architectureNotes,
@@ -385,8 +425,9 @@ export async function previewScreenAiContext(
       status: item.status,
     })),
     assets: {
-      primaryLogo: project.projectAssets[0] ?? null,
-      instruction: project.projectAssets[0]
+      primaryLogo: project.projectAssets.find((asset) => asset.isPrimaryLogo) ?? null,
+      available: project.projectAssets,
+      instruction: project.projectAssets.some((asset) => asset.isPrimaryLogo)
         ? "Использовать только assetRef основного логотипа; не рисовать и не заменять логотип."
         : "Основной логотип не загружен.",
     },

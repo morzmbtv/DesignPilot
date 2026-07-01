@@ -32,7 +32,7 @@ export function applyPrimaryLogoPolicy(idm: InternalDesignModel, primaryLogo: Pr
     name: primaryLogo.name,
     parent: rootId,
     children: [],
-    layout: { x: Math.round((390 - width) / 2), y: 96, width, height, zIndex: maxZ(elements) + 1, visible: true, locked: false },
+    layout: { x: Math.round((idm.metadata.viewport.width - width) / 2), y: 96, width, height, zIndex: maxZ(elements) + 1, visible: true, locked: false },
     style: { background: "transparent", opacity: 1 },
     animation: { type: "none", durationMs: 0, curve: "linear", delayMs: 0 },
     constraints: ["asset:primary-logo", "asset:do-not-redraw", "editor:rotation=0"],

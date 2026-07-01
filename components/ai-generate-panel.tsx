@@ -118,7 +118,7 @@ export function AiGeneratePanel({
                 value={request}
                 onChange={(event) => setRequest(event.target.value)}
                 rows={4}
-                placeholder="Например: Создай экран Dashboard для EDUS Parents App"
+                placeholder="Например: Создай экран Dashboard для моего приложения"
                 className="mt-2 w-full resize-y rounded-2xl border border-violet/15 bg-white px-4 py-3 text-[15px] leading-6 placeholder:text-muted/60 focus:border-violet"
               />
             </label>
@@ -143,7 +143,7 @@ export function AiGeneratePanel({
             </div>
           ) : null}
           {failure?.recoverable ? (
-            <div className="mt-4 rounded-2xl border border-red-100 bg-white p-4">
+            <ModeOnly mode="expert"><div className="mt-4 rounded-2xl border border-red-100 bg-white p-4">
               <p className="text-sm font-black text-red-700">AI Debug</p>
               <div className="mt-3 grid gap-2 text-sm text-ink sm:grid-cols-2">
                 <span><strong>Модель:</strong> {failure.model || "неизвестно"}</span>
@@ -164,8 +164,9 @@ export function AiGeneratePanel({
                 <button type="button" onClick={fixJsonLocally} disabled={isGenerating} className="h-10 rounded-xl bg-ink px-4 text-sm font-bold text-white disabled:opacity-60">Исправить JSON</button>
                 <button type="button" onClick={retryJson} disabled={isGenerating} className="h-10 rounded-xl border border-line px-4 text-sm font-bold text-violet disabled:opacity-60">Повторить</button>
               </div>
-            </div>
+            </div></ModeOnly>
           ) : null}
+          {failure?.recoverable ? <ModeOnly mode="simple"><p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">Не удалось собрать экран. Переключитесь в режим «Разработчик», чтобы открыть диагностику или повторить запрос.</p></ModeOnly> : null}
         </div>
 
         <ModeOnly mode="expert"><aside className="rounded-2xl bg-ink p-5 text-white">
@@ -186,14 +187,14 @@ export function AiGeneratePanel({
               <p className="text-xs font-black uppercase tracking-[0.12em] text-violet">Версия {result.versionNumber}</p>
               <h3 className="mt-1 text-xl font-black">{result.changeSummary}</h3>
             </div>
-            <button
+            <ModeOnly mode="expert"><button
               type="button"
               onClick={copyPrompt}
               className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-bold text-ink hover:border-violet/30 hover:text-violet"
             >
               {copied ? <Check size={16} /> : <Copy size={16} />}
               {copied ? "Скопировано" : "Копировать промпт"}
-            </button>
+            </button></ModeOnly>
           </div>
 
           {result.warnings.length ? (
@@ -203,13 +204,13 @@ export function AiGeneratePanel({
             </div>
           ) : result.generatedAssetIds.length ? (
             <p className="mt-5 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
-              Создано изображений: {result.generatedAssetIds.length}. Они сохранены в библиотеке ассетов и привязаны к Canvas.
+              Ассеты созданы: {result.generatedAssetIds.length}. Они сохранены в библиотеке и привязаны к Canvas.
             </p>
           ) : null}
 
           <div className="mt-6 grid gap-5 lg:grid-cols-2">
             <ModeOnly mode="expert"><ResultBlock title="Спецификация дизайна" value={result.designSpec} /></ModeOnly>
-            <ResultBlock title="Промпт для изображения" value={result.imagePrompt} mono />
+            <ModeOnly mode="expert"><ResultBlock title="Промпт для изображения" value={result.imagePrompt} mono /></ModeOnly>
           </div>
 
           {result.newRules.length ? (

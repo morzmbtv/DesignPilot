@@ -16,6 +16,9 @@ const tagByType: Record<LayoutElement["type"], string> = {
   chip: "Chip",
   badge: "Badge",
   progress: "Progress",
+  background: "Background",
+  decoration: "Decoration",
+  character: "Character",
 };
 
 export function generateHtmlLayout(layoutJson: LayoutJson, designSpec = "", projectRules: ProjectRule[] = []) {

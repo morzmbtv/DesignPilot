@@ -3,7 +3,7 @@ import type { InternalDesignModel } from "@/lib/idm/types";
 
 export function generateImagePromptFromIdm(idm: InternalDesignModel, layoutJson: LayoutJson) {
   const lines = [
-    `Create one high-fidelity frontal mobile app screen for "${idm.metadata.project}", screen "${idm.metadata.screenName}".`,
+    `Create one high-fidelity ${idm.metadata.platform} product screen for "${idm.metadata.project}", screen "${idm.metadata.screenName}".`,
     `Viewport must be exactly ${idm.metadata.viewport.width}x${idm.metadata.viewport.height}px. Safe area top ${idm.metadata.viewport.safeAreaTop}px. Page padding ${idm.metadata.viewport.pagePadding}px.`,
     "Use the project's existing visual language and component library references. Do not invent a new style.",
     ...(idm.hierarchy.elements.some((element) => element.content.assetRole === "primaryLogo") ? [

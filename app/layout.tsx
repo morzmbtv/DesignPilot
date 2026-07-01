@@ -5,8 +5,8 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = {
-  title: "EDUS AI — Design Prompt Builder",
-  description: "Превращайте идеи мобильных приложений в продуманные дизайн-спецификации.",
+  title: "DesignPilot — AI Design Workspace",
+  description: "Превращайте продуктовые идеи в продуманные визуальные сцены и дизайн-спецификации.",
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

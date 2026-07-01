@@ -170,7 +170,7 @@ export function EditCurrentVersionPanel({
           ) : null}
 
           {failure?.recoverable ? (
-            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <ModeOnly mode="expert"><div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
               <p className="font-black">AI Debug: ответ модели сохранён, но JSON требует проверки</p>
               <p className="mt-1">Модель: {failure.model || "неизвестно"}</p>
               <p className="mt-1">Причина: {failure.parseError || failure.error}</p>
@@ -194,8 +194,9 @@ export function EditCurrentVersionPanel({
                   Повторить
                 </button>
               </div>
-            </div>
+            </div></ModeOnly>
           ) : null}
+          {failure?.recoverable ? <ModeOnly mode="simple"><p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">Правку не удалось применить автоматически. Переключитесь в режим «Разработчик», чтобы открыть диагностику или повторить запрос.</p></ModeOnly> : null}
         </div>
 
         <ModeOnly mode="expert"><aside className="rounded-2xl border border-coral/15 bg-white p-5">

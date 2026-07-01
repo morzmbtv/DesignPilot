@@ -30,7 +30,10 @@ export function isProjectAssetType(value: string): value is ProjectAssetType {
 
 export function assetTypeToIdmType(type: ProjectAssetType) {
   if (type === "icon") return "icon" as const;
-  if (type === "illustration" || type === "character" || type === "decoration") return "illustration" as const;
+  if (type === "character") return "character" as const;
+  if (type === "decoration") return "decoration" as const;
+  if (type === "background") return "background" as const;
+  if (type === "illustration") return "illustration" as const;
   return "image" as const;
 }
 

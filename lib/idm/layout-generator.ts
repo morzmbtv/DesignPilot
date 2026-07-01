@@ -7,7 +7,7 @@ export function generateLayoutFromIdm(idm: InternalDesignModel): LayoutJson {
     .filter((element) => element.id !== idm.hierarchy.rootId)
     .filter((element) => element.layout.visible !== false)
     .map(toLayoutElement);
-  return { viewport: { width: 390, height: 844 }, elements };
+  return { viewport: { width: idm.metadata.viewport.width, height: idm.metadata.viewport.height }, elements };
 }
 
 function toLayoutElement(element: IdmElement): LayoutElement {

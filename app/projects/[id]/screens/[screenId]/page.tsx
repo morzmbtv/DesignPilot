@@ -17,6 +17,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/security";
 import { createIdmFromLegacy } from "@/lib/idm/legacy-converter";
 import type { InternalDesignModel } from "@/lib/idm/types";
+import { PLATFORM_LABELS, PLATFORMS, VIEWPORT_PRESETS, resolveViewport } from "@/lib/project-config";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,9 @@ export default async function ScreenPage({ params }: { params: { id: string; scr
         select: {
           name: true,
           platform: true,
+          viewportPreset: true,
+          customViewportWidth: true,
+          customViewportHeight: true,
           rules: { select: { category: true, name: true, value: true } },
           projectAssets: {
             orderBy: [{ isPrimaryLogo: "desc" }, { createdAt: "desc" }],
@@ -69,7 +73,11 @@ export default async function ScreenPage({ params }: { params: { id: string; scr
         </div>
       </div>
       <div id="prompt" className="scroll-mt-24"><ScreenActionBar projectId={params.id} screenId={screen.id} versionId={screen.versions[0]?.id ?? null} imagePrompt={screen.versions[0]?.imagePrompt ?? ""} approved={screen.approvedVersionId === screen.versions[0]?.id} /></div>
-      <nav className="mt-4 flex gap-1 overflow-x-auto border-b border-line" aria-label="Разделы экрана">{[["#overview", "Обзор"], ["#scheme", "Схема"], ["#prompt", "Промпт"], ["#versions", "Версии"], ["#additional", "Дополнительно"]].map(([href, label]) => <a key={href} href={href} className="whitespace-nowrap px-4 py-3 text-sm font-bold text-muted hover:text-violet">{label}</a>)}</nav>
+      <nav className="mt-4 flex gap-1 overflow-x-auto border-b border-line" aria-label="Разделы экрана">
+        {[["#overview", "Обзор"], ["#scheme", "Canvas"], ["#versions", "Версии"]].map(([href, label]) => <a key={href} href={href} className="whitespace-nowrap px-4 py-3 text-sm font-bold text-muted hover:text-violet">{label}</a>)}
+        <ModeOnly mode="expert"><a href="#prompt" className="whitespace-nowrap px-4 py-3 text-sm font-bold text-muted hover:text-violet">Промпт</a></ModeOnly>
+        <ModeOnly mode="expert"><a href="#additional" className="whitespace-nowrap px-4 py-3 text-sm font-bold text-muted hover:text-violet">Дополнительно</a></ModeOnly>
+      </nav>
 
       <section className="mt-6 rounded-2xl border border-violet/15 bg-violet/[0.035] p-5"><h2 className="font-black">Пять шагов до готового экрана</h2><div className="mt-4 grid gap-3 text-sm text-muted sm:grid-cols-2 xl:grid-cols-5">{["Заполните память проекта", "Сгенерируйте вариант", "Проверьте схему", "Скопируйте промпт", "Утвердите версию"].map((item, index) => <div key={item} className="flex gap-2"><span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-violet text-xs font-black text-white">{index + 1}</span><span>{item}</span></div>)}</div></section>
 
@@ -92,6 +100,12 @@ export default async function ScreenPage({ params }: { params: { id: string; scr
           Назначение
           <textarea name="purpose" rows={3} defaultValue={screen.purpose} className="mt-2 w-full resize-y rounded-xl border border-line px-4 py-3 text-sm leading-6" />
         </label>
+        <div className="grid gap-4 sm:col-span-3 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="text-sm font-bold">Платформа экрана<select name="platform" defaultValue={screen.platform} className="mt-2 h-11 w-full rounded-xl border border-line bg-white px-3 text-sm"><option value="inherit">Как в проекте</option>{PLATFORMS.map((item) => <option key={item} value={item}>{PLATFORM_LABELS[item]}</option>)}</select></label>
+          <label className="text-sm font-bold">Viewport экрана<select name="viewportPreset" defaultValue={screen.viewportPreset} className="mt-2 h-11 w-full rounded-xl border border-line bg-white px-3 text-sm"><option value="inherit">Как в проекте</option>{Object.entries(VIEWPORT_PRESETS).map(([key, item]) => <option key={key} value={key}>{item.label}</option>)}</select></label>
+          <label className="text-sm font-bold">Custom width<input name="customViewportWidth" type="number" min={240} defaultValue={screen.customViewportWidth ?? ""} className="mt-2 h-11 w-full rounded-xl border border-line px-3 text-sm" /></label>
+          <label className="text-sm font-bold">Custom height<input name="customViewportHeight" type="number" min={320} defaultValue={screen.customViewportHeight ?? ""} className="mt-2 h-11 w-full rounded-xl border border-line px-3 text-sm" /></label>
+        </div>
       </form></ModeOnly>
 
       <ModeOnly mode="expert"><div>{screen.versions[0] ? (
@@ -161,9 +175,9 @@ export default async function ScreenPage({ params }: { params: { id: string; scr
                 </div>
                 {version.changeSummary ? <p className="mt-3 text-sm font-bold text-violet">{version.changeSummary}</p> : null}
                 <ModeOnly mode="expert"><VersionBlock label="Запрос пользователя" value={version.userRequest} /><VersionBlock label="Спецификация дизайна" value={version.designSpec} /><VersionBlock label="Промпт для изображения" value={version.imagePrompt} mono /><VersionBlock label="Изменения" value={version.diff} /></ModeOnly>
-                <div className="mt-5">
+                <ModeOnly mode="expert"><div className="mt-5">
                   <VersionCopyActions designSpec={version.designSpec} imagePrompt={version.imagePrompt} compact />
-                </div>
+                </div></ModeOnly>
                 <ModeOnly mode="expert">{version.aiPromptLogs[0] ? (
                   <div className="mt-3">
                     <AiPromptDebugger
@@ -200,7 +214,7 @@ export default async function ScreenPage({ params }: { params: { id: string; scr
           </form>
         </aside></ModeOnly>
       </div>
-      <ModeOnly mode="simple"><details id="additional" className="mt-8 scroll-mt-24 rounded-2xl border border-line bg-white p-5"><summary className="cursor-pointer text-sm font-bold">Дополнительно</summary><p className="mt-3 text-sm leading-6 text-muted">JSON, HTML, Flutter, отладка промпта и технические журналы доступны в экспертном режиме.</p></details></ModeOnly>
+      <ModeOnly mode="simple"><p className="mt-8 rounded-2xl border border-line bg-white p-5 text-sm leading-6 text-muted">Нужны JSON, HTML, Flutter или диагностика? Переключитесь в режим «Разработчик» в боковом меню.</p></ModeOnly>
       <ModeOnly mode="expert"><details id="additional" className="mt-8 scroll-mt-24 rounded-2xl border border-red-100 bg-white p-5"><summary className="cursor-pointer text-sm font-bold text-red-600">Дополнительно</summary><form action={remove} className="mt-4"><ConfirmSubmitButton message={`Удалить экран «${screen.name}»? Это действие нельзя отменить.`} className="inline-flex h-10 items-center gap-2 rounded-xl border border-red-200 px-4 text-sm font-bold text-red-600"><Trash2 size={16} /> Удалить экран</ConfirmSubmitButton></form></details></ModeOnly>
     </AppShell>
   );
@@ -214,7 +228,17 @@ function readScreenIdm(
     changeSummary: string;
     internalDesignModel: { normalizedJson: string | null; modelJson: string } | null;
   },
-  screen: { name: string; project: { name: string; platform: string } },
+  screen: {
+    name: string;
+    platform: string;
+    viewportPreset: string;
+    customViewportWidth: number | null;
+    customViewportHeight: number | null;
+    project: {
+      name: string; platform: string; viewportPreset: string;
+      customViewportWidth: number | null; customViewportHeight: number | null;
+    };
+  },
 ): InternalDesignModel {
   try {
     if (version.internalDesignModel?.normalizedJson) return JSON.parse(version.internalDesignModel.normalizedJson) as InternalDesignModel;
@@ -222,12 +246,19 @@ function readScreenIdm(
   } catch {
     // Старые или повреждённые версии безопасно открываются через legacy-конвертацию.
   }
+  const platform = screen.platform !== "inherit" ? screen.platform : screen.project.platform;
+  const viewport = resolveViewport({
+    platform,
+    viewportPreset: screen.viewportPreset !== "inherit" ? screen.viewportPreset : screen.project.viewportPreset,
+    customViewportWidth: screen.viewportPreset === "custom" ? screen.customViewportWidth : screen.project.customViewportWidth,
+    customViewportHeight: screen.viewportPreset === "custom" ? screen.customViewportHeight : screen.project.customViewportHeight,
+  });
   return createIdmFromLegacy({
     projectName: screen.project.name,
     screenName: screen.name,
-    platform: screen.project.platform,
+    platform,
     versionNumber: version.versionNumber,
-    layoutJson: version.layoutJson,
+    layoutJson: version.layoutJson || { viewport: { width: viewport.width, height: viewport.height }, elements: [] },
     userRequest: version.userRequest,
     changeSummary: version.changeSummary,
     source: "legacy_migration",

@@ -24,8 +24,13 @@ export function createIdmFromLegacy(input: LegacyInput): InternalDesignModel {
       screenName: input.screenName,
       project: input.projectName,
       version: input.versionNumber,
-      viewport: { width: 390, height: 844, safeAreaTop: 44, pagePadding: 20 },
-      platform: input.platform || "iOS и Android",
+      viewport: {
+        width: layout.viewport.width,
+        height: layout.viewport.height,
+        safeAreaTop: layout.viewport.width <= 430 ? 44 : 0,
+        pagePadding: layout.viewport.width >= 768 ? 32 : 20,
+      },
+      platform: input.platform || "ios",
       source: input.source || "legacy_migration",
       compilerVersion: IDM_COMPILER_VERSION,
     },
@@ -38,10 +43,10 @@ export function createIdmFromLegacy(input: LegacyInput): InternalDesignModel {
           name: input.screenName,
           parent: null,
           children: layout.elements.map((element) => element.id),
-          layout: { x: 0, y: 0, width: 390, height: 844, visible: true, zIndex: 0 },
+          layout: { x: 0, y: 0, width: layout.viewport.width, height: layout.viewport.height, visible: true, zIndex: 0 },
           style: { background: "#FFFFFF", opacity: 1 },
           animation: defaultAnimation(),
-          constraints: ["viewport:390x844"],
+          constraints: [`viewport:${layout.viewport.width}x${layout.viewport.height}`],
           behavior: [],
           semanticRole: "screen",
           content: { text: input.screenName },
@@ -79,11 +84,11 @@ export function applyLayoutToIdm(base: InternalDesignModel, layout: LayoutJson, 
       rootId,
       elements: [
         {
-          ...(oldElements.get(rootId) ?? elementToIdm({ id: rootId, type: "section", label: base.metadata.screenName, x: 0, y: 0, width: 390, height: 844 }, null)),
+          ...(oldElements.get(rootId) ?? elementToIdm({ id: rootId, type: "section", label: base.metadata.screenName, x: 0, y: 0, width: layout.viewport.width, height: layout.viewport.height }, null)),
           id: rootId,
           parent: null,
           children: layout.elements.map((element) => element.id),
-          layout: { x: 0, y: 0, width: 390, height: 844, visible: true, zIndex: 0 },
+          layout: { x: 0, y: 0, width: layout.viewport.width, height: layout.viewport.height, visible: true, zIndex: 0 },
         },
         ...layout.elements.map((element) => ({
           ...(oldElements.get(element.id) ?? elementToIdm(element, rootId)),
@@ -161,6 +166,9 @@ function semanticRole(type: LayoutElement["type"]) {
   if (type === "input") return "input";
   if (type === "bottomNav") return "navigation";
   if (type === "image" || type === "illustration") return "image";
+  if (type === "background") return "background";
+  if (type === "decoration") return "decoration";
+  if (type === "character") return "character";
   return type === "text" ? "text" : "group";
 }
 

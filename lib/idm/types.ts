@@ -3,8 +3,8 @@ import type { LayoutElementType, LayoutJson } from "@/lib/layout";
 export const IDM_COMPILER_VERSION = "idm-v1";
 
 export type IdmViewport = {
-  width: 390;
-  height: 844;
+  width: number;
+  height: number;
   safeAreaTop: number;
   pagePadding: number;
   bottomNavArea?: number;

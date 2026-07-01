@@ -1,6 +1,7 @@
 export const layoutElementTypes = [
   "text", "card", "button", "icon", "avatar", "image", "illustration",
   "bottomNav", "section", "input", "chip", "badge", "progress",
+  "background", "decoration", "character",
 ] as const;
 
 export type LayoutElementType = typeof layoutElementTypes[number];
@@ -13,15 +14,17 @@ export type LayoutElement = {
   fontWeight?: number; visible?: boolean; componentRef?: string; assetRef?: string;
   assetRole?: string;
 };
-export type LayoutJson = { viewport: { width: 390; height: 844 }; elements: LayoutElement[] };
+export type LayoutJson = { viewport: { width: number; height: number }; elements: LayoutElement[] };
 
 export function validateLayoutJson(value: unknown): { valid: boolean; errors: string[]; layout: LayoutJson | null } {
   const errors: string[] = [];
   if (!value || typeof value !== "object" || Array.isArray(value)) return { valid: false, errors: ["layoutJson должен быть объектом"], layout: null };
   const candidate = value as Record<string, unknown>;
   const viewport = candidate.viewport as Record<string, unknown> | undefined;
-  if (viewport?.width !== 390) errors.push("viewport.width должен быть равен 390");
-  if (viewport?.height !== 844) errors.push("viewport.height должен быть равен 844");
+  const viewportWidth = Number(viewport?.width);
+  const viewportHeight = Number(viewport?.height);
+  if (!Number.isFinite(viewportWidth) || viewportWidth < 240 || viewportWidth > 5000) errors.push("viewport.width должен быть от 240 до 5000");
+  if (!Number.isFinite(viewportHeight) || viewportHeight < 320 || viewportHeight > 10000) errors.push("viewport.height должен быть от 320 до 10000");
   if (!Array.isArray(candidate.elements)) errors.push("elements должен быть массивом");
   const elements = Array.isArray(candidate.elements) ? candidate.elements : [];
   const ids = new Set<string>();
@@ -36,7 +39,7 @@ export function validateLayoutJson(value: unknown): { valid: boolean; errors: st
     const x = Number(element.x), y = Number(element.y), width = Number(element.width), height = Number(element.height);
     if (Number.isFinite(width) && width < 4) errors.push(`elements[${index}].width должен быть не меньше 4`);
     if (Number.isFinite(height) && height < 4) errors.push(`elements[${index}].height должен быть не меньше 4`);
-    if ([x, y, width, height].every(Number.isFinite) && (x < -20 || y < -20 || x + width > 410 || y + height > 864)) errors.push(`elements[${index}] выходит за допустимые границы viewport`);
+    if ([x, y, width, height, viewportWidth, viewportHeight].every(Number.isFinite) && (x < -20 || y < -20 || x + width > viewportWidth + 20 || y + height > viewportHeight + 20)) errors.push(`elements[${index}] выходит за допустимые границы viewport`);
   });
   return { valid: errors.length === 0, errors, layout: errors.length ? null : value as LayoutJson };
 }

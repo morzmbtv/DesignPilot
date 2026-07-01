@@ -18,7 +18,7 @@ export async function testOpenRouter(model: string): Promise<OpenRouterTestResul
     const messages = [
         {
           role: "system",
-          content: "You are a connection test for EDUS AI. Answer briefly and do not use markdown.",
+          content: "You are a connection test for DesignPilot. Answer briefly and do not use markdown.",
         },
         {
           role: "user",

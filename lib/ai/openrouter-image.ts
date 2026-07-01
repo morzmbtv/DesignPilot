@@ -3,6 +3,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { assertProjectAccess, requireUser } from "@/lib/security";
 import { MAX_ASSET_BYTES, type ProjectAssetType } from "@/lib/assets";
+import { parseStyleDna } from "@/lib/project-config";
 
 const IMAGE_API_URL = "https://openrouter.ai/api/v1/images";
 const TIMEOUT_MS = 120_000;
@@ -173,7 +174,7 @@ export async function testOpenRouterImage(projectId: string) {
 function buildAssetPrompt(
   project: {
     name: string; description: string; targetUsers: string; appGoal: string; styleDirection: string;
-    designRequirements: string; constraints: string;
+    designRequirements: string; constraints: string; projectType: string; platform: string; styleDna: string;
     rules: Array<{ category: string; name: string; value: string }>;
     designTokens: Array<{ group: string; name: string; value: string }>;
     projectAssets: Array<{ id: string; name: string }>;
@@ -183,12 +184,14 @@ function buildAssetPrompt(
   useProjectStyle: boolean,
 ) {
   const colorTokens = project.designTokens.filter((token) => /color|цвет/i.test(`${token.group} ${token.name}`));
+  const styleDna = parseStyleDna(project.styleDna);
   return [
-    `Create one standalone ${type} asset for the mobile app project "${project.name}".`,
+    `Create one standalone ${type} asset for the "${project.name}" project.`,
     `User description: ${prompt.trim()}`,
     "Do not include text unless explicitly requested.",
     type === "background" ? "Create a clean full-screen background." : "Use a transparent or visually simple background when possible.",
-    useProjectStyle ? `Project style: ${project.styleDirection || "clean modern mobile UI"}` : "",
+    useProjectStyle ? `Project type: ${project.projectType}. Platform: ${project.platform}.` : "",
+    useProjectStyle ? `Project style: ${project.styleDirection || "clean modern product design"}. Style DNA: ${JSON.stringify(styleDna)}.` : "",
     useProjectStyle ? `Project memory: ${project.description}; audience: ${project.targetUsers}; goal: ${project.appGoal}.` : "",
     useProjectStyle ? `Design requirements: ${project.designRequirements}. Constraints: ${project.constraints}.` : "",
     useProjectStyle && project.rules.length ? `Project rules: ${project.rules.map((rule) => `${rule.category}/${rule.name}: ${rule.value}`).join("; ")}` : "",

@@ -1,6 +1,8 @@
 # DesignPilot
 
-DesignPilot — сервис для проектирования мобильных экранов: память проекта, AI Generate/Edit, Wireframe Preview, Layout Editor, Design Library, Component Intelligence Engine и личные аккаунты пользователей.
+DesignPilot — сервис для проектирования цифровых продуктов: память проекта, AI Generate/Edit, Canvas, Layout Editor, Design Library, Component Intelligence Engine и личные аккаунты пользователей.
+
+Проект может быть мобильным приложением, веб-приложением, сайтом, лендингом, dashboard, ecommerce, education, fintech или healthcare-продуктом. В памяти проекта настраиваются Platform, Viewport Preset и Style DNA; Visual Scene Planner использует их вместо захардкоженного стиля.
 
 Основной сценарий развёртывания — Next.js на Vercel и PostgreSQL в Neon или Supabase. SQLite и локальный Docker больше не используются как основной путь.
 
@@ -228,6 +230,12 @@ Project Asset Library добавляется миграцией:
 
 ```text
 prisma/migrations/20260701130000_project_assets
+```
+
+Project Type, Style DNA и динамические viewport presets добавляются миграцией:
+
+```text
+prisma/migrations/20260701150000_project_type_style_dna_viewports
 ```
 
 Для production используется PostgreSQL migration history. Старый локальный SQLite-файл автоматически не переносится.

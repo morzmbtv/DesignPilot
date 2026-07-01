@@ -28,7 +28,7 @@ export default async function ProjectsPage() {
           <p className="text-sm font-bold text-violet">Рабочее пространство / Проекты</p>
           <h1 className="mt-4 text-4xl font-black tracking-[-0.05em] text-ink sm:text-5xl">Проекты</h1>
           <p className="mt-3 max-w-xl text-[15px] leading-6 text-muted">
-            Создавайте и развивайте дизайн-системы мобильных продуктов.
+            Создавайте и развивайте дизайн-системы цифровых продуктов.
           </p>
         </div>
         <ButtonLink href="/projects/new" className="h-12 self-start px-6 sm:self-auto">
@@ -88,7 +88,7 @@ export default async function ProjectsPage() {
         ) : (
           <div className="col-span-full rounded-[20px] border border-dashed border-line bg-white py-16 text-center">
             <p className="text-lg font-bold">Здесь появятся ваши проекты</p>
-            <p className="mt-2 text-sm text-muted">Начните с идеи мобильного приложения.</p>
+            <p className="mt-2 text-sm text-muted">Начните с идеи приложения, сайта или цифрового сервиса.</p>
           </div>
         )}
         <Link

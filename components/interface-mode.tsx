@@ -27,9 +27,9 @@ export function useInterfaceMode() {
 
 export function InterfaceModeToggle({ compact = false }: { compact?: boolean }) {
   const { mode, setMode } = useInterfaceMode();
-  return <div className={`grid grid-cols-2 rounded-xl border border-line bg-[#f6f6fa] p-1 ${compact ? "w-[210px]" : "w-full"}`} aria-label="Режим интерфейса">
-    <button onClick={() => setMode("simple")} className={`flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-xs font-bold ${mode === "simple" ? "bg-white text-violet shadow-sm" : "text-muted"}`}><Sparkles size={14} /> Простой</button>
-    <button onClick={() => setMode("expert")} className={`flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-xs font-bold ${mode === "expert" ? "bg-white text-violet shadow-sm" : "text-muted"}`}><SlidersHorizontal size={14} /> Экспертный</button>
+  return <div className={`grid grid-cols-2 rounded-xl border border-line bg-[#f6f6fa] p-1 ${compact ? "w-[250px]" : "w-full"}`} aria-label="Режим работы">
+    <button type="button" onClick={() => setMode("simple")} className={`flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-xs font-bold ${mode === "simple" ? "bg-white text-violet shadow-sm" : "text-muted"}`}><Sparkles size={14} /> Дизайнер</button>
+    <button type="button" onClick={() => setMode("expert")} className={`flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-xs font-bold ${mode === "expert" ? "bg-white text-violet shadow-sm" : "text-muted"}`}><SlidersHorizontal size={14} /> Разработчик</button>
   </div>;
 }
 

@@ -9,6 +9,10 @@ import {
   saveProjectMemory,
   updateProjectMemoryRule,
 } from "@/app/actions";
+import {
+  PLATFORM_LABELS, PLATFORMS, PROJECT_TYPE_LABELS, PROJECT_TYPES,
+  VIEWPORT_PRESETS, type StyleDna,
+} from "@/lib/project-config";
 
 type Memory = {
   description: string;
@@ -19,6 +23,11 @@ type Memory = {
   designRequirements: string;
   architectureNotes: string;
   constraints: string;
+  projectType: string;
+  viewportPreset: string;
+  customViewportWidth: number | null;
+  customViewportHeight: number | null;
+  styleDna: StyleDna;
 };
 
 type Rule = {
@@ -53,8 +62,13 @@ export function ProjectMemoryEditor({
   const [busyRule, setBusyRule] = useState<string | null>(null);
   const [ruleError, setRuleError] = useState("");
 
-  function updateMemory(field: keyof Memory, nextValue: string) {
+  function updateMemory<K extends keyof Memory>(field: K, nextValue: Memory[K]) {
     setMemory((current) => ({ ...current, [field]: nextValue }));
+    setSaveState("dirty");
+  }
+
+  function updateStyleDna(field: keyof StyleDna, value: string) {
+    setMemory((current) => ({ ...current, styleDna: { ...current.styleDna, [field]: value } }));
     setSaveState("dirty");
   }
 
@@ -158,13 +172,12 @@ export function ProjectMemoryEditor({
                 onChange={(value) => updateMemory("appGoal", value)}
               />
             </div>
-            <MemoryField
-              label="Платформа"
-              hint="Например, iOS, Android или обе платформы"
-              value={memory.platform}
-              onChange={(value) => updateMemory("platform", value)}
-              input
-            />
+            <div className="grid gap-5 lg:grid-cols-3">
+              <MemorySelect label="Тип проекта" value={memory.projectType} onChange={(value) => updateMemory("projectType", value)} options={PROJECT_TYPES.map((item) => [item, PROJECT_TYPE_LABELS[item]])} />
+              <MemorySelect label="Платформа" value={memory.platform} onChange={(value) => updateMemory("platform", value)} options={PLATFORMS.map((item) => [item, PLATFORM_LABELS[item]])} />
+              <MemorySelect label="Viewport" value={memory.viewportPreset} onChange={(value) => updateMemory("viewportPreset", value)} options={Object.entries(VIEWPORT_PRESETS).map(([key, item]) => [key, item.label])} />
+            </div>
+            {memory.viewportPreset === "custom" ? <div className="grid gap-5 sm:grid-cols-2"><MemoryNumber label="Ширина viewport" value={memory.customViewportWidth} onChange={(value) => updateMemory("customViewportWidth", value)} /><MemoryNumber label="Высота viewport" value={memory.customViewportHeight} onChange={(value) => updateMemory("customViewportHeight", value)} /></div> : null}
           </MemorySection>
 
           <MemorySection
@@ -190,6 +203,29 @@ export function ProjectMemoryEditor({
 
           <MemorySection
             number="03"
+            title="Style DNA"
+            description="Фирменный визуальный язык проекта. Эти значения определяют сцены, ассеты и компоненты."
+          >
+            <div className="grid gap-5 lg:grid-cols-2">
+              {([
+                ["brandName", "Название бренда", "Например, Finora"],
+                ["primaryColors", "Основные цвета", "#635BFF, #111827"],
+                ["secondaryColors", "Дополнительные цвета", "#A5B4FC, #F8FAFC"],
+                ["typography", "Типографика", "Inter, современная и контрастная"],
+                ["illustrationStyle", "Стиль иллюстраций", "Абстрактные стеклянные 3D-объекты"],
+                ["iconStyle", "Стиль иконок", "Линейные, скруглённые"],
+                ["mood", "Настроение", "Надёжное, технологичное"],
+                ["layoutDensity", "Плотность layout", "Воздушная"],
+                ["radiusScale", "Радиусы", "12 / 16 / 24"],
+                ["shadowStyle", "Тени", "Мягкие, холодные"],
+                ["backgroundStyle", "Фон", "Светлый градиент"],
+                ["motionStyle", "Анимации", "Спокойные fade/slide"],
+              ] as const).map(([field, label, hint]) => <MemoryField key={field} label={label} hint={hint} value={memory.styleDna[field]} onChange={(value) => updateStyleDna(field, value)} input />)}
+            </div>
+          </MemorySection>
+
+          <MemorySection
+            number="04"
             title="Архитектура и рамки"
             description="Структура приложения, ключевые сценарии и ограничения решения."
           >
@@ -225,7 +261,7 @@ export function ProjectMemoryEditor({
         <section id="project-rules" className="scroll-mt-8 rounded-[22px] border border-line bg-white p-5 sm:p-7">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-violet">04 · Правила</p>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-violet">05 · Правила</p>
               <h2 className="mt-2 text-2xl font-black tracking-[-0.03em]">Правила проекта</h2>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">
                 Инструкции, которые соблюдаются при подготовке схем и промптов.
@@ -297,6 +333,7 @@ export function ProjectMemoryEditor({
           <div className="mt-6 space-y-3 border-t border-white/10 pt-5 text-sm">
             <MemoryProgress label="Основы" complete={Boolean(memory.description && memory.targetUsers && memory.appGoal)} />
             <MemoryProgress label="Дизайн" complete={Boolean(memory.styleDirection && memory.designRequirements)} />
+            <MemoryProgress label="Style DNA" complete={Boolean(memory.styleDna.brandName && memory.styleDna.primaryColors)} />
             <MemoryProgress label="Архитектура" complete={Boolean(memory.architectureNotes)} />
             <MemoryProgress label="Правила" complete={rules.length > 0} />
           </div>
@@ -330,6 +367,14 @@ function MemoryField({ label, hint, value, onChange, large = false, input = fals
       )}
     </label>
   );
+}
+
+function MemorySelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: string[][] }) {
+  return <label className="block"><span className="text-sm font-black text-ink">{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} className="mt-2 h-12 w-full rounded-2xl border border-line bg-[#fcfcfe] px-4 text-sm">{options.map(([key, text]) => <option key={key} value={key}>{text}</option>)}</select></label>;
+}
+
+function MemoryNumber({ label, value, onChange }: { label: string; value: number | null; onChange: (value: number | null) => void }) {
+  return <label className="block"><span className="text-sm font-black text-ink">{label}</span><input type="number" min={240} value={value ?? ""} onChange={(event) => onChange(event.target.value ? Number(event.target.value) : null)} className="mt-2 h-12 w-full rounded-2xl border border-line bg-[#fcfcfe] px-4 text-sm" /></label>;
 }
 
 function SaveStatus({ state }: { state: "idle" | "dirty" | "saving" | "saved" | "error" }) {

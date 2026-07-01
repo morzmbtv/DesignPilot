@@ -4,9 +4,15 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { assertProjectAccess, assertScreenAccess, requireUser } from "@/lib/security";
+import { EMPTY_STYLE_DNA, isPlatform, isProjectType, isViewportPreset, type StyleDna } from "@/lib/project-config";
 
 function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
+}
+
+function positiveNumber(formData: FormData, key: string) {
+  const number = Number(value(formData, key));
+  return Number.isFinite(number) && number > 0 ? Math.round(number) : null;
 }
 
 type ProjectMemoryInput = {
@@ -18,6 +24,11 @@ type ProjectMemoryInput = {
   designRequirements: string;
   architectureNotes: string;
   constraints: string;
+  projectType: string;
+  viewportPreset: string;
+  customViewportWidth: number | null;
+  customViewportHeight: number | null;
+  styleDna: StyleDna;
 };
 
 type ProjectRuleInput = {
@@ -39,7 +50,12 @@ export async function createProject(formData: FormData) {
       description: value(formData, "description"),
       targetUsers: value(formData, "targetUsers"),
       appGoal: value(formData, "appGoal"),
-      platform: value(formData, "platform") || "iOS и Android",
+      platform: isPlatform(value(formData, "platform")) ? value(formData, "platform") : "ios",
+      projectType: isProjectType(value(formData, "projectType")) ? value(formData, "projectType") : "mobile_app",
+      viewportPreset: isViewportPreset(value(formData, "viewportPreset")) ? value(formData, "viewportPreset") : "iphone_390x844",
+      customViewportWidth: positiveNumber(formData, "customViewportWidth"),
+      customViewportHeight: positiveNumber(formData, "customViewportHeight"),
+      styleDna: JSON.stringify({ ...EMPTY_STYLE_DNA, brandName: name }),
       styleDirection: value(formData, "styleDirection"),
       designRequirements: value(formData, "designRequirements"),
       architectureNotes: value(formData, "architectureNotes"),
@@ -63,6 +79,10 @@ export async function updateProject(id: string, formData: FormData) {
       targetUsers: value(formData, "targetUsers"),
       appGoal: value(formData, "appGoal"),
       platform: value(formData, "platform"),
+      projectType: isProjectType(value(formData, "projectType")) ? value(formData, "projectType") : undefined,
+      viewportPreset: isViewportPreset(value(formData, "viewportPreset")) ? value(formData, "viewportPreset") : undefined,
+      customViewportWidth: positiveNumber(formData, "customViewportWidth"),
+      customViewportHeight: positiveNumber(formData, "customViewportHeight"),
       styleDirection: value(formData, "styleDirection"),
       designRequirements: value(formData, "designRequirements"),
       architectureNotes: value(formData, "architectureNotes"),
@@ -84,7 +104,12 @@ export async function saveProjectMemory(projectId: string, input: ProjectMemoryI
       description: input.description.trim(),
       targetUsers: input.targetUsers.trim(),
       appGoal: input.appGoal.trim(),
-      platform: input.platform.trim(),
+      platform: isPlatform(input.platform) ? input.platform : "custom",
+      projectType: isProjectType(input.projectType) ? input.projectType : "custom",
+      viewportPreset: isViewportPreset(input.viewportPreset) ? input.viewportPreset : "custom",
+      customViewportWidth: input.customViewportWidth,
+      customViewportHeight: input.customViewportHeight,
+      styleDna: JSON.stringify(input.styleDna),
       styleDirection: input.styleDirection.trim(),
       designRequirements: input.designRequirements.trim(),
       architectureNotes: input.architectureNotes.trim(),
@@ -232,6 +257,10 @@ export async function createScreen(projectId: string, formData: FormData) {
       name,
       purpose: value(formData, "purpose"),
       status: "draft",
+      platform: value(formData, "platform") || "inherit",
+      viewportPreset: value(formData, "viewportPreset") || "inherit",
+      customViewportWidth: positiveNumber(formData, "customViewportWidth"),
+      customViewportHeight: positiveNumber(formData, "customViewportHeight"),
     },
   });
   revalidatePath(`/projects/${projectId}/screens`);
@@ -248,6 +277,10 @@ export async function updateScreen(projectId: string, screenId: string, formData
     data: {
       name: value(formData, "name"),
       purpose: value(formData, "purpose"),
+      platform: value(formData, "platform") || "inherit",
+      viewportPreset: value(formData, "viewportPreset") || "inherit",
+      customViewportWidth: positiveNumber(formData, "customViewportWidth"),
+      customViewportHeight: positiveNumber(formData, "customViewportHeight"),
     },
   });
   revalidatePath(`/projects/${projectId}/screens`);

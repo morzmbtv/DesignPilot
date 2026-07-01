@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/security";
 import { ModeOnly } from "@/components/interface-mode";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { isPlatform, isProjectType, isViewportPreset, parseStyleDna } from "@/lib/project-config";
 
 export const dynamic = "force-dynamic";
 
@@ -37,11 +38,16 @@ export default async function ProjectMemoryPage({ params }: { params: { id: stri
     description: project.description,
     targetUsers: project.targetUsers,
     appGoal: project.appGoal,
-    platform: project.platform,
+    platform: isPlatform(project.platform) ? project.platform : "custom",
     styleDirection: project.styleDirection,
     designRequirements: project.designRequirements,
     architectureNotes: project.architectureNotes,
     constraints: project.constraints,
+    projectType: isProjectType(project.projectType) ? project.projectType : "custom",
+    viewportPreset: isViewportPreset(project.viewportPreset) ? project.viewportPreset : "custom",
+    customViewportWidth: project.customViewportWidth,
+    customViewportHeight: project.customViewportHeight,
+    styleDna: parseStyleDna(project.styleDna),
   };
   const initialRules = project.rules.map((rule) => ({
     ...rule,

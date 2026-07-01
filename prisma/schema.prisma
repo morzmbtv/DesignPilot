@@ -72,35 +72,40 @@ model UserSettings {
 }
 
 model Project {
-  id                 String                      @id @default(cuid())
-  userId             String?
-  name               String
-  description        String                      @default("")
-  targetUsers        String                      @default("")
-  appGoal            String                      @default("")
-  platform           String                      @default("iOS и Android")
-  styleDirection     String                      @default("")
-  designRequirements String                      @default("")
-  architectureNotes  String                      @default("")
-  constraints        String                      @default("")
-  designSystemSource String                      @default("current_library")
-  createdAt          DateTime                    @default(now())
-  updatedAt          DateTime                    @updatedAt
-  rules              ProjectRule[]
-  screens            Screen[]
-  designDecisions    DesignDecision[]
-  screenSummaries    ScreenSummary[]
-  aiPromptLogs       AiPromptLog[]
-  designComponents   DesignComponent[]
-  designTokens       DesignToken[]
-  designAssets       DesignAsset[]
-  designPatterns     DesignPattern[]
-  designImports      DesignImport[]
-  similarityReports  ComponentSimilarityReport[]
-  styleReports       StyleSimilarityReport[]
-  screenDesigns      ScreenDesign[]
-  projectAssets      ProjectAsset[]
-  user               User?                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                   String                      @id @default(cuid())
+  userId               String?
+  name                 String
+  description          String                      @default("")
+  targetUsers          String                      @default("")
+  appGoal              String                      @default("")
+  platform             String                      @default("ios")
+  styleDirection       String                      @default("")
+  designRequirements   String                      @default("")
+  architectureNotes    String                      @default("")
+  constraints          String                      @default("")
+  projectType          String                      @default("mobile_app")
+  viewportPreset       String                      @default("iphone_390x844")
+  customViewportWidth  Int?
+  customViewportHeight Int?
+  styleDna             String                      @default("{}")
+  designSystemSource   String                      @default("current_library")
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+  rules                ProjectRule[]
+  screens              Screen[]
+  designDecisions      DesignDecision[]
+  screenSummaries      ScreenSummary[]
+  aiPromptLogs         AiPromptLog[]
+  designComponents     DesignComponent[]
+  designTokens         DesignToken[]
+  designAssets         DesignAsset[]
+  designPatterns       DesignPattern[]
+  designImports        DesignImport[]
+  similarityReports    ComponentSimilarityReport[]
+  styleReports         StyleSimilarityReport[]
+  screenDesigns        ScreenDesign[]
+  projectAssets        ProjectAsset[]
+  user                 User?                       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -120,21 +125,25 @@ model ProjectRule {
 }
 
 model Screen {
-  id                String           @id @default(cuid())
-  projectId         String
-  approvedVersionId String?          @unique
-  name              String
-  purpose           String           @default("")
-  status            String           @default("draft")
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  project           Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  versions          ScreenVersion[]  @relation("ScreenVersions")
-  approvedVersion   ScreenVersion?   @relation("ApprovedScreenVersion", fields: [approvedVersionId], references: [id], onDelete: SetNull)
-  designDecisions   DesignDecision[]
-  summaries         ScreenSummary[]
-  aiPromptLogs      AiPromptLog[]
-  screenDesigns     ScreenDesign[]
+  id                   String           @id @default(cuid())
+  projectId            String
+  approvedVersionId    String?          @unique
+  name                 String
+  purpose              String           @default("")
+  status               String           @default("draft")
+  platform             String           @default("inherit")
+  viewportPreset       String           @default("inherit")
+  customViewportWidth  Int?
+  customViewportHeight Int?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  project              Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions             ScreenVersion[]  @relation("ScreenVersions")
+  approvedVersion      ScreenVersion?   @relation("ApprovedScreenVersion", fields: [approvedVersionId], references: [id], onDelete: SetNull)
+  designDecisions      DesignDecision[]
+  summaries            ScreenSummary[]
+  aiPromptLogs         AiPromptLog[]
+  screenDesigns        ScreenDesign[]
 
   @@index([projectId])
 }

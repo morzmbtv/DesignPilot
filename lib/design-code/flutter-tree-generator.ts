@@ -40,7 +40,7 @@ function renderPositioned(element: LayoutElement) {
 
 function renderWidget(element: LayoutElement) {
   const label = escapeDart(element.label || element.id);
-  if (element.assetRef && ["image", "illustration", "icon"].includes(element.type)) {
+  if (element.assetRef && ["image", "illustration", "icon", "background", "decoration", "character"].includes(element.type)) {
     return `Image(
   image: const AssetImage('asset://${escapeDart(element.assetRef)}'),
   fit: BoxFit.contain,
@@ -80,6 +80,9 @@ function renderWidget(element: LayoutElement) {
 )`;
     case "image":
     case "illustration":
+    case "background":
+    case "decoration":
+    case "character":
       return `Container(
   decoration: BoxDecoration(borderRadius: BorderRadius.circular(${element.radius ?? 0})),
   child: Center(child: Text('${label}')), // ${element.type} placeholder
