@@ -5,11 +5,11 @@ import { buildScreenEditPrompt, type ScreenEditPromptContext } from "@/lib/ai/pr
 import { callOpenRouterTracked, completeAiPromptLog, OpenRouterError, type OpenRouterResponseFormat } from "@/lib/openrouter";
 import { prisma } from "@/lib/prisma";
 import { parseDecisions, saveDecisions, type DecisionInput } from "@/lib/design-intelligence";
-import { generateHtmlLayout } from "@/lib/design-code/html-layout-generator";
-import { generateFlutterWidgetTree } from "@/lib/design-code/flutter-tree-generator";
 import { validateLayoutJson, type LayoutElement, type LayoutJson } from "@/lib/layout";
 import { assertProjectAccess, assertScreenAccess, requireUser } from "@/lib/security";
 import { AiJsonRecoveryError, recoverJson, throwJsonRecoveryError } from "@/lib/ai/json-recovery";
+import { compileDesignModel, DesignCompilerError } from "@/lib/idm/design-compiler";
+import { createIdmFromLegacy } from "@/lib/idm/legacy-converter";
 
 export type SuggestedRule = {
   category: string;
@@ -33,83 +33,7 @@ export type EditScreenVersionResult =
   | { ok: false; error: string; recoverable?: boolean; logId?: string; model?: string; rawResponse?: string; parseError?: string; validation?: Record<string, string[]> };
 
 const responseFormat: OpenRouterResponseFormat = {
-  type: "json_schema",
-  json_schema: {
-    name: "edus_screen_version_edit",
-    strict: true,
-    schema: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        updatedDesignSpec: {
-          type: "string",
-          description: "Complete updated design specification with only the requested change applied.",
-        },
-        updatedImagePrompt: {
-          type: "string",
-          description: "Complete updated image generation prompt with only the requested change applied.",
-        },
-        updatedLayoutJson: {
-          type: "object", additionalProperties: false,
-          properties: {
-            viewport: { type: "object", additionalProperties: false, properties: { width: { type: "number" }, height: { type: "number" } }, required: ["width", "height"] },
-            elements: { type: "array", items: { type: "object", additionalProperties: false, properties: {
-              id: { type: "string" }, type: { type: "string" }, label: { type: "string" },
-              x: { type: "number" }, y: { type: "number" }, width: { type: "number" }, height: { type: "number" },
-              align: { type: "string" }, style: { type: "string" }, radius: { type: "number" },
-              background: { type: "string" }, opacity: { type: "number" }, zIndex: { type: "number" }, locked: { type: "boolean" },
-            }, required: ["id", "type", "label", "x", "y", "width", "height", "align", "style", "radius", "background", "opacity", "zIndex", "locked"] } },
-          }, required: ["viewport", "elements"],
-        },
-        rulesToAddOrUpdate: {
-          type: "array",
-          description: "Project-level rule suggestions for global edits; empty for local edits.",
-          items: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              category: { type: "string" },
-              name: { type: "string" },
-              value: { type: "string" },
-              source: { type: "string" },
-            },
-            required: ["category", "name", "value", "source"],
-          },
-        },
-        changeSummary: { type: "string" },
-        diff: {
-          type: "string",
-          description: "Concise human-readable before/after diff containing only changed details.",
-        },
-        decisions: {
-          type: "array",
-          items: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              type: { type: "string" },
-              target: { type: "string" },
-              oldValue: { type: ["string", "null"] },
-              newValue: { type: ["string", "null"] },
-              reason: { type: ["string", "null"] },
-              source: { type: "string" },
-              status: { type: "string" },
-            },
-            required: ["type", "target", "oldValue", "newValue", "reason", "source", "status"],
-          },
-        },
-      },
-      required: [
-        "updatedDesignSpec",
-        "updatedImagePrompt",
-        "updatedLayoutJson",
-        "rulesToAddOrUpdate",
-        "changeSummary",
-        "diff",
-        "decisions",
-      ],
-    },
-  },
+  type: "json_object",
 };
 
 export async function editCurrentScreenVersion(
@@ -128,7 +52,7 @@ export async function editCurrentScreenVersion(
   const screen = await prisma.screen.findFirst({
     where: { id: screenId, projectId },
     include: {
-      versions: { orderBy: { versionNumber: "desc" }, take: 1 },
+      versions: { orderBy: { versionNumber: "desc" }, take: 1, include: { internalDesignModel: true } },
       project: {
         include: {
           rules: { orderBy: [{ category: "asc" }, { createdAt: "asc" }] },
@@ -174,6 +98,20 @@ export async function editCurrentScreenVersion(
       changeSummary: latestVersion.changeSummary,
       diff: latestVersion.diff,
       layoutJson: latestVersion.layoutJson ? JSON.parse(latestVersion.layoutJson) : null,
+      internalDesignModel: latestVersion.internalDesignModel?.normalizedJson
+        ? JSON.parse(latestVersion.internalDesignModel.normalizedJson)
+        : latestVersion.internalDesignModel?.modelJson
+          ? JSON.parse(latestVersion.internalDesignModel.modelJson)
+          : createIdmFromLegacy({
+              projectName: screen.project.name,
+              screenName: screen.name,
+              platform: screen.project.platform,
+              versionNumber: latestVersion.versionNumber,
+              layoutJson: latestVersion.layoutJson,
+              userRequest: latestVersion.userRequest,
+              changeSummary: latestVersion.changeSummary,
+              source: "legacy_migration",
+            }),
     },
   };
 
@@ -189,7 +127,8 @@ export async function editCurrentScreenVersion(
       },
     );
     logId = tracked.logId;
-    const edited = parseEditedScreen(tracked.text);
+    const codeRules = screen.project.rules.map(({ category, name, value }) => ({ category, name, value }));
+    const edited = parseEditedScreenIdm(tracked.text, codeRules);
     const targetedLockedIds = getTargetedLockedIds(lockedElements, request, selectedElementId);
     const changedLocked = lockedElements.filter((element) => {
       const candidate = edited.updatedLayoutJson.elements.find((item) => item.id === element.id);
@@ -225,9 +164,6 @@ export async function editCurrentScreenVersion(
       return { ok: false, error: "AI не изменил расположение элементов для этой правки." };
     }
 
-    const codeRules = screen.project.rules.map(({ category, name, value }) => ({ category, name, value }));
-    const htmlLayout = generateHtmlLayout(edited.updatedLayoutJson, edited.updatedDesignSpec, codeRules);
-    const flutterWidgetTree = generateFlutterWidgetTree(edited.updatedLayoutJson, edited.updatedDesignSpec, codeRules);
     const version = await prisma.$transaction(async (tx) => {
       const latest = await tx.screenVersion.findFirst({
         where: { screenId },
@@ -245,15 +181,25 @@ export async function editCurrentScreenVersion(
           diff: edited.diff,
           newRulesJson: JSON.stringify(edited.rulesToAddOrUpdate),
           layoutJson: JSON.stringify(edited.updatedLayoutJson),
-          htmlLayout,
-          flutterWidgetTree,
+          htmlLayout: edited.htmlLayout,
+          flutterWidgetTree: edited.flutterWidgetTree,
         },
         select: { id: true, versionNumber: true },
+      });
+      await tx.screenDesign.create({
+        data: {
+          projectId,
+          screenId,
+          screenVersionId: created.id,
+          modelJson: JSON.stringify(edited.internalDesignModel),
+          normalizedJson: JSON.stringify(edited.internalDesignModel),
+          validationJson: JSON.stringify(edited.idmValidation),
+        },
       });
       await saveDecisions(tx, { projectId, screenId, screenVersionId: created.id, decisions: edited.decisions });
       return created;
     });
-    await completeAiPromptLog(logId, { parsedResponse: { ...edited, detectedEditIntent: layoutIntent ? "layout" : "content", selectedElementId: selectedElementId || null, validationErrors: [] }, screenVersionId: version.id });
+    await completeAiPromptLog(logId, { parsedResponse: { ...edited, internalDesignModel: edited.internalDesignModel, idmValidation: edited.idmValidation, detectedEditIntent: layoutIntent ? "layout" : "content", selectedElementId: selectedElementId || null, validationErrors: [] }, screenVersionId: version.id, error: null });
 
     revalidatePath(`/projects/${projectId}/screens`);
     revalidatePath(`/projects/${projectId}/screens/${screenId}`);
@@ -291,6 +237,16 @@ export async function editCurrentScreenVersion(
       };
     }
     if (error instanceof OpenRouterError) return { ok: false, error: error.message };
+    if (error instanceof DesignCompilerError) {
+      return {
+        ok: false,
+        error: "IDM не прошёл проверку Design Compiler.",
+        recoverable: true,
+        logId: logId ?? undefined,
+        parseError: error.message,
+        validation: { layout: error.validationErrors },
+      };
+    }
     if (error instanceof Error && error.message === "INVALID_AI_JSON") {
       return { ok: false, error: "Модель вернула JSON в неверном формате. Повторите правку." };
     }
@@ -429,6 +385,29 @@ export async function saveSuggestedProjectRule(
 
   revalidatePath(`/projects/${projectId}/memory`);
   return { ok: true, mode: existing ? "updated" : "created" };
+}
+
+function parseEditedScreenIdm(raw: string, projectRules: Array<{ category: string; name: string; value: string }>) {
+  const recovery = recoverJson(raw);
+  if (!recovery.ok) throwJsonRecoveryError(raw, recovery);
+  const parsed = recovery.value;
+  if (!isRecord(parsed)) throwJsonRecoveryError(raw, recovery, ["Ответ должен быть JSON-объектом IDM."]);
+  const compiled = compileDesignModel(parsed, projectRules);
+
+  return {
+    updatedDesignSpec: compiled.designSpec,
+    updatedImagePrompt: compiled.imagePrompt,
+    updatedLayoutJson: compiled.layoutJson,
+    htmlLayout: compiled.htmlLayout,
+    flutterWidgetTree: compiled.flutterWidgetTree,
+    internalDesignModel: compiled.idm,
+    idmValidation: compiled.validation,
+    rulesToAddOrUpdate: [] as SuggestedRule[],
+    changeSummary: compiled.idm.exportMetadata.changeSummary || "AI edit",
+    diff: compiled.idm.exportMetadata.changeSummary || "IDM обновлён; артефакты пересобраны Design Compiler.",
+    decisions: [] as DecisionInput[],
+    aiRecovery: { stages: recovery.stages, warnings: recovery.warnings, repaired: recovery.repairedText !== recovery.jsonText },
+  };
 }
 
 function parseEditedScreen(raw: string) {

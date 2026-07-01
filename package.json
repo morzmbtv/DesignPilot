@@ -13,7 +13,8 @@
     "db:inspect": "tsx scripts/inspect-db.ts",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
-    "db:assign-owner": "tsx scripts/assign-owner.ts"
+    "db:assign-owner": "tsx scripts/assign-owner.ts",
+    "db:backfill-idm": "tsx scripts/backfill-screen-designs.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

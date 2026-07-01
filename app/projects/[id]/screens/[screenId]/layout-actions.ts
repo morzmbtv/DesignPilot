@@ -3,54 +3,72 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { createBlankLayout, parseLayoutJson, validateLayoutJson, type LayoutJson } from "@/lib/layout";
-import { generateHtmlLayout } from "@/lib/design-code/html-layout-generator";
-import { generateFlutterWidgetTree } from "@/lib/design-code/flutter-tree-generator";
 import { assertProjectAccess, assertScreenAccess, assertVersionAccess, requireUser } from "@/lib/security";
+import { compileDesignModel } from "@/lib/idm/design-compiler";
+import { applyLayoutToIdm, createIdmFromLegacy } from "@/lib/idm/legacy-converter";
 
 export async function saveManualLayoutVersion(projectId: string, screenId: string, baseVersionId: string, layout: LayoutJson) {
   const user = await requireUser();
   await assertProjectAccess(projectId, user.id);
   await assertScreenAccess(screenId, user.id);
   await assertVersionAccess(baseVersionId, user.id);
+
   const validation = validateLayoutJson(layout);
   if (!validation.valid || !validation.layout) return { ok: false as const, error: validation.errors.join("; ") };
+
   const base = await prisma.screenVersion.findFirst({
     where: { id: baseVersionId, screenId, screen: { projectId } },
-    include: { screen: { include: { project: { include: { rules: true } } } } },
+    include: { internalDesignModel: true, screen: { include: { project: { include: { rules: true, designTokens: true } } } } },
   });
   if (!base) return { ok: false as const, error: "Исходная версия не найдена." };
+
   const previous = parseLayoutJson(base.layoutJson).layout;
   const previousMap = new Map(previous?.elements.map((element) => [element.id, element]));
   const changed = layout.elements.filter((element) => JSON.stringify(previousMap.get(element.id)) !== JSON.stringify(element));
   const removed = previous?.elements.filter((element) => !layout.elements.some((candidate) => candidate.id === element.id)) ?? [];
   const layoutChanged = JSON.stringify(previous) !== JSON.stringify(layout);
-  const date = new Date().toISOString();
-  const specOverrides = changed.map((element) => `- element [${element.id}] “${element.label}”: x=${element.x}, y=${element.y}, width=${element.width}, height=${element.height}, locked=${Boolean(element.locked)}\n- reason: manually edited in Wireframe Layout Editor\n- date: ${date}`).concat(removed.map((element) => `- element [${element.id}] removed\n- reason: manually edited in Wireframe Layout Editor\n- date: ${date}`)).join("\n");
-  const promptOverrides = changed.map((element) => `- element [${element.id}] “${element.label}” must be exactly at x=${element.x}, y=${element.y}, width=${element.width}, height=${element.height}, locked=${Boolean(element.locked)}`).concat(removed.map((element) => `- remove element [${element.id}] “${element.label}”`)).join("\n");
-  const designSpec = `${base.designSpec}\n\nMANUAL_LAYOUT_OVERRIDES:\n${specOverrides || "- layout JSON reviewed without coordinate changes"}`;
-  const imagePrompt = `${base.imagePrompt}\n\nSTRICT LAYOUT OVERRIDES:\n${promptOverrides || "- follow the attached Layout JSON exactly"}\n- preserve all other elements unless explicitly changed\n- do not reinterpret the screen\n- do not redesign the screen\n- follow the Design Spec and Layout JSON exactly`;
-  if (layoutChanged && imagePrompt === base.imagePrompt) return { ok: false as const, error: "Промпт не обновился после изменения Layout. Версия не сохранена." };
   const codeRules = base.screen.project.rules.map(({ category, name, value }) => ({ category, name, value }));
-  const htmlLayout = generateHtmlLayout(layout, designSpec, codeRules);
-  const flutterWidgetTree = generateFlutterWidgetTree(layout, designSpec, codeRules);
+  const baseIdm = readVersionIdm(base);
+  const idm = applyLayoutToIdm(baseIdm, layout, "Manual layout edit", "Manual Wireframe Layout Editor change");
+  const compiled = compileDesignModel(idm, codeRules);
+
+  if (layoutChanged && compiled.imagePrompt === base.imagePrompt) {
+    return { ok: false as const, error: "Промпт не обновился после изменения Layout. Версия не сохранена." };
+  }
+
   const version = await prisma.$transaction(async (tx) => {
     const latest = await tx.screenVersion.findFirst({ where: { screenId }, orderBy: { versionNumber: "desc" }, select: { versionNumber: true } });
-    return tx.screenVersion.create({
+    const created = await tx.screenVersion.create({
       data: {
         screenId,
         versionNumber: (latest?.versionNumber ?? 0) + 1,
         userRequest: "Manual Wireframe Layout Editor change",
-        designSpec,
-        imagePrompt,
-        layoutJson: JSON.stringify(layout),
-        htmlLayout,
-        flutterWidgetTree,
+        designSpec: compiled.designSpec,
+        imagePrompt: compiled.imagePrompt,
+        layoutJson: JSON.stringify(compiled.layoutJson),
+        htmlLayout: compiled.htmlLayout,
+        flutterWidgetTree: compiled.flutterWidgetTree,
         changeSummary: "Manual layout edit",
-        diff: changed.map((element) => `${element.id}: label="${element.label}", x=${element.x}, y=${element.y}, ${element.width}×${element.height}, locked=${Boolean(element.locked)}`).concat(removed.map((element) => `${element.id}: удалён`)).join("\n"),
+        diff: changed
+          .map((element) => `${element.id}: label="${element.label}", x=${element.x}, y=${element.y}, ${element.width}×${element.height}, locked=${Boolean(element.locked)}`)
+          .concat(removed.map((element) => `${element.id}: удалён`))
+          .join("\n"),
       },
       select: { id: true, versionNumber: true },
     });
+    await tx.screenDesign.create({
+      data: {
+        projectId,
+        screenId,
+        screenVersionId: created.id,
+        modelJson: JSON.stringify(compiled.idm),
+        normalizedJson: JSON.stringify(compiled.idm),
+        validationJson: JSON.stringify(compiled.validation),
+      },
+    });
+    return created;
   });
+
   revalidatePath(`/projects/${projectId}/screens/${screenId}`);
   return { ok: true as const, versionNumber: version.versionNumber };
 }
@@ -70,44 +88,88 @@ export async function saveDesignCodeVersion(projectId: string, screenId: string,
   await assertProjectAccess(projectId, user.id);
   await assertScreenAccess(screenId, user.id);
   await assertVersionAccess(baseVersionId, user.id);
+
   const base = await prisma.screenVersion.findFirst({
     where: { id: baseVersionId, screenId, screen: { projectId } },
-    include: { screen: { include: { project: { include: { rules: true } } } } },
+    include: { internalDesignModel: true, screen: { include: { project: { include: { rules: true, designTokens: true } } } } },
   });
   if (!base) return { ok: false as const, error: "Версия экрана не найдена." };
+
   const parsed = layoutOverride ? validateLayoutJson(layoutOverride) : parseLayoutJson(base.layoutJson);
   if (!parsed.valid || !parsed.layout) {
     return { ok: false as const, error: base.layoutJson ? "Layout JSON невалиден, HTML/Flutter не может быть создан." : "Layout JSON отсутствует." };
   }
-  const rules = base.screen.project.rules.map(({ category, name, value }) => ({ category, name, value }));
-  const generatedHtml = generateHtmlLayout(parsed.layout, base.designSpec, rules);
-  const flutterWidgetTree = generateFlutterWidgetTree(parsed.layout, base.designSpec, rules);
-  const htmlLayout = htmlOverride?.trim() || generatedHtml;
+
   const previous = parseLayoutJson(base.layoutJson).layout;
   const layoutChanged = JSON.stringify(previous) !== JSON.stringify(parsed.layout);
-  const synchronizedPrompt = layoutChanged
-    ? `${base.imagePrompt}\n\nSTRICT LAYOUT OVERRIDES:\n${parsed.layout.elements.map((element) => `- element [${element.id}] “${element.label}” must be exactly at x=${element.x}, y=${element.y}, width=${element.width}, height=${element.height}, locked=${Boolean(element.locked)}`).join("\n")}\n- preserve all other elements unless explicitly changed\n- follow the Layout JSON exactly`
-    : base.imagePrompt;
-  if (layoutChanged && synchronizedPrompt === base.imagePrompt) return { ok: false as const, error: "Промпт не обновился после изменения Layout. Версия не сохранена." };
+  const codeRules = base.screen.project.rules.map(({ category, name, value }) => ({ category, name, value }));
+  const idm = applyLayoutToIdm(
+    readVersionIdm(base),
+    parsed.layout,
+    htmlOverride ? "Manual HTML review with IDM-preserved layout" : "Design Code regenerated from IDM/Layout",
+    htmlOverride ? "Ручное редактирование HTML Layout" : "Обновление Design Code из Layout JSON",
+  );
+  const compiled = compileDesignModel(idm, codeRules);
+  const htmlLayout = htmlOverride?.trim() || compiled.htmlLayout;
+
+  if (layoutChanged && compiled.imagePrompt === base.imagePrompt) {
+    return { ok: false as const, error: "Промпт не обновился после изменения Layout. Версия не сохранена." };
+  }
+
   const version = await prisma.$transaction(async (tx) => {
     const latest = await tx.screenVersion.findFirst({ where: { screenId }, orderBy: { versionNumber: "desc" }, select: { versionNumber: true } });
-    return tx.screenVersion.create({
+    const created = await tx.screenVersion.create({
       data: {
         screenId,
         versionNumber: (latest?.versionNumber ?? 0) + 1,
-        userRequest: htmlOverride ? "Ручное редактирование HTML Layout" : "Обновление Design Code из Layout JSON",
-        designSpec: base.designSpec,
-        imagePrompt: synchronizedPrompt,
-        layoutJson: JSON.stringify(parsed.layout),
+        userRequest: htmlOverride ? "Ручное редактирование HTML Layout" : "Обновление Design Code из IDM/Layout",
+        designSpec: compiled.designSpec,
+        imagePrompt: compiled.imagePrompt,
+        layoutJson: JSON.stringify(compiled.layoutJson),
         htmlLayout,
-        flutterWidgetTree,
+        flutterWidgetTree: compiled.flutterWidgetTree,
         newRulesJson: base.newRulesJson,
-        changeSummary: htmlOverride ? "Ручное редактирование HTML Layout" : "Design Code обновлён из Layout JSON",
-        diff: htmlOverride ? "HTML Layout изменён вручную; Layout JSON не изменялся." : "HTML Layout и Flutter Tree пересобраны детерминированно.",
+        changeSummary: htmlOverride ? "HTML Layout проверен; IDM сохранён" : "Design Code пересобран из IDM",
+        diff: htmlOverride ? "HTML Layout изменён вручную; IDM и Layout JSON остаются источником истины." : "HTML Layout и Flutter Tree пересобраны Design Compiler.",
       },
-      select: { versionNumber: true },
+      select: { id: true, versionNumber: true },
     });
+    await tx.screenDesign.create({
+      data: {
+        projectId,
+        screenId,
+        screenVersionId: created.id,
+        modelJson: JSON.stringify(compiled.idm),
+        normalizedJson: JSON.stringify(compiled.idm),
+        validationJson: JSON.stringify(compiled.validation),
+      },
+    });
+    return created;
   });
+
   revalidatePath(`/projects/${projectId}/screens/${screenId}`);
   return { ok: true as const, versionNumber: version.versionNumber };
+}
+
+function readVersionIdm(base: {
+  versionNumber: number;
+  layoutJson: string | null;
+  userRequest: string;
+  changeSummary: string;
+  internalDesignModel: { normalizedJson: string | null; modelJson: string } | null;
+  screen: { name: string; project: { name: string; platform: string; designTokens: Array<{ group: string; name: string; value: string }> } };
+}) {
+  if (base.internalDesignModel?.normalizedJson) return JSON.parse(base.internalDesignModel.normalizedJson);
+  if (base.internalDesignModel?.modelJson) return JSON.parse(base.internalDesignModel.modelJson);
+  return createIdmFromLegacy({
+    projectName: base.screen.project.name,
+    screenName: base.screen.name,
+    platform: base.screen.project.platform,
+    versionNumber: base.versionNumber,
+    layoutJson: base.layoutJson,
+    userRequest: base.userRequest,
+    changeSummary: base.changeSummary,
+    source: "legacy_migration",
+    tokens: base.screen.project.designTokens.map(({ group, name, value }) => ({ group, name, value })),
+  });
 }

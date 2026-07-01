@@ -4,14 +4,13 @@ import { revalidatePath } from "next/cache";
 import { callOpenRouterTracked, completeAiPromptLog, OpenRouterError, type OpenRouterResponseFormat } from "@/lib/openrouter";
 import { buildScreenGenerationPrompt, type ScreenGenerationPromptContext } from "@/lib/ai/prompts";
 import { prisma } from "@/lib/prisma";
-import { parseDecisions, saveDecisions, type DecisionInput } from "@/lib/design-intelligence";
-import { validateLayoutJson, type LayoutJson } from "@/lib/layout";
+import { saveDecisions, type DecisionInput } from "@/lib/design-intelligence";
+import { type LayoutJson } from "@/lib/layout";
 import { processGeneratedComponents } from "@/app/projects/[id]/library/actions";
-import { generateHtmlLayout } from "@/lib/design-code/html-layout-generator";
-import { generateFlutterWidgetTree } from "@/lib/design-code/flutter-tree-generator";
 import { styleSimilarity, type ComponentCandidate } from "@/lib/design-library/intelligence";
 import { assertProjectAccess, assertScreenAccess, requireUser } from "@/lib/security";
 import { AiJsonRecoveryError, recoverJson, throwJsonRecoveryError } from "@/lib/ai/json-recovery";
+import { compileDesignModel, DesignCompilerError } from "@/lib/idm/design-compiler";
 
 export type GeneratedRule = {
   category: string;
@@ -76,96 +75,7 @@ export type GenerateScreenResult =
     };
 
 const responseFormat: OpenRouterResponseFormat = {
-  type: "json_schema",
-  json_schema: {
-    name: "edus_screen_design",
-    strict: true,
-    schema: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        designSpec: {
-          type: "string",
-          description: "Precise implementation-ready mobile screen specification.",
-        },
-        imagePrompt: {
-          type: "string",
-          description: "Standalone prompt ready to paste into ChatGPT image generation.",
-        },
-        layoutJson: {
-          type: "object", additionalProperties: false,
-          properties: {
-            viewport: { type: "object", additionalProperties: false, properties: { width: { type: "number" }, height: { type: "number" } }, required: ["width", "height"] },
-            elements: { type: "array", items: { type: "object", additionalProperties: false, properties: {
-              id: { type: "string" }, type: { type: "string" }, label: { type: "string" },
-              x: { type: "number" }, y: { type: "number" }, width: { type: "number" }, height: { type: "number" },
-              align: { type: "string" }, style: { type: "string" }, radius: { type: "number" },
-              background: { type: "string" }, opacity: { type: "number" }, zIndex: { type: "number" }, locked: { type: "boolean" },
-            }, required: ["id", "type", "label", "x", "y", "width", "height", "align", "style", "radius", "background", "opacity", "zIndex", "locked"] } },
-          }, required: ["viewport", "elements"],
-        },
-        newRules: {
-          type: "array",
-          description: "Only new reusable project-level design rules discovered while designing this screen.",
-          items: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              category: { type: "string" },
-              name: { type: "string" },
-              value: { type: "string" },
-              source: { type: "string" },
-            },
-            required: ["category", "name", "value", "source"],
-          },
-        },
-        changeSummary: {
-          type: "string",
-          description: "Short summary of what this version introduces or changes.",
-        },
-        decisions: {
-          type: "array",
-          description: "Design decisions discovered while creating this screen.",
-          items: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              type: { type: "string" },
-              target: { type: "string" },
-              oldValue: { type: ["string", "null"] },
-              newValue: { type: ["string", "null"] },
-              reason: { type: ["string", "null"] },
-              source: { type: "string" },
-              status: { type: "string" },
-            },
-            required: ["type", "target", "oldValue", "newValue", "reason", "source", "status"],
-          },
-        },
-        componentSuggestions: {
-          type: "array", items: { type: "object", additionalProperties: false, properties: {
-            name: { type: "string" }, description: { type: "string" }, category: { type: "string" },
-            designSpec: { type: "string" }, imagePrompt: { type: "string" },
-            layoutJson: {
-              type: "object", additionalProperties: false,
-              properties: {
-                viewport: { type: "object", additionalProperties: false, properties: { width: { type: "number" }, height: { type: "number" } }, required: ["width", "height"] },
-                elements: { type: "array", items: { type: "object", additionalProperties: false, properties: {
-                  id: { type: "string" }, type: { type: "string" }, label: { type: "string" },
-                  x: { type: "number" }, y: { type: "number" }, width: { type: "number" }, height: { type: "number" },
-                  align: { type: "string" }, style: { type: "string" }, radius: { type: "number" },
-                  background: { type: "string" }, opacity: { type: "number" }, zIndex: { type: "number" }, locked: { type: "boolean" },
-                }, required: ["id", "type", "label", "x", "y", "width", "height", "align", "style", "radius", "background", "opacity", "zIndex", "locked"] } },
-              },
-              required: ["viewport", "elements"],
-            },
-            states: { type: "array", items: { type: "string" } }, variants: { type: "array", items: { type: "string" } },
-            usageGuidelines: { type: "string" }, accessibilityNotes: { type: "string" }, reason: { type: "string" },
-          }, required: ["name", "description", "category", "designSpec", "imagePrompt", "layoutJson", "states", "variants", "usageGuidelines", "accessibilityNotes", "reason"] },
-        },
-      },
-      required: ["designSpec", "imagePrompt", "layoutJson", "newRules", "changeSummary", "decisions", "componentSuggestions"],
-    },
-  },
+  type: "json_object",
 };
 
 export async function generateScreenWithAI(
@@ -182,7 +92,7 @@ export async function generateScreenWithAI(
   const screen = await prisma.screen.findFirst({
     where: { id: screenId, projectId },
     include: {
-      versions: { orderBy: { versionNumber: "desc" }, take: 1 },
+      versions: { orderBy: { versionNumber: "desc" }, take: 1, include: { internalDesignModel: true } },
       project: {
         include: {
           rules: { orderBy: [{ category: "asc" }, { createdAt: "asc" }] },
@@ -191,7 +101,7 @@ export async function generateScreenWithAI(
           screens: {
             orderBy: { createdAt: "asc" },
             include: {
-              approvedVersion: true,
+              approvedVersion: { include: { internalDesignModel: true } },
               summaries: { orderBy: { updatedAt: "desc" }, take: 1 },
             },
           },
@@ -232,6 +142,11 @@ export async function generateScreenWithAI(
           imagePrompt: screen.versions[0].imagePrompt,
           changeSummary: screen.versions[0].changeSummary,
           layoutJson: screen.versions[0].layoutJson ? JSON.parse(screen.versions[0].layoutJson) : null,
+          internalDesignModel: screen.versions[0].internalDesignModel?.normalizedJson
+            ? JSON.parse(screen.versions[0].internalDesignModel.normalizedJson)
+            : screen.versions[0].internalDesignModel?.modelJson
+              ? JSON.parse(screen.versions[0].internalDesignModel.modelJson)
+              : null,
           }
         : null,
     },
@@ -247,6 +162,11 @@ export async function generateScreenWithAI(
           imagePrompt: item.approvedVersion!.imagePrompt,
           changeSummary: item.approvedVersion!.changeSummary,
           layoutJson: item.approvedVersion!.layoutJson ? JSON.parse(item.approvedVersion!.layoutJson) : null,
+          internalDesignModel: item.approvedVersion!.internalDesignModel?.normalizedJson
+            ? JSON.parse(item.approvedVersion!.internalDesignModel.normalizedJson)
+            : item.approvedVersion!.internalDesignModel?.modelJson
+              ? JSON.parse(item.approvedVersion!.internalDesignModel.modelJson)
+              : null,
         },
       })),
     relatedScreens: project.screens
@@ -273,10 +193,8 @@ export async function generateScreenWithAI(
     );
     logId = tracked.logId;
 
-    const generated = parseGeneratedScreen(tracked.text);
     const codeRules = project.rules.map(({ category, name, value }) => ({ category, name, value }));
-    const htmlLayout = generateHtmlLayout(generated.layoutJson, generated.designSpec, codeRules);
-    const flutterWidgetTree = generateFlutterWidgetTree(generated.layoutJson, generated.designSpec, codeRules);
+    const generated = parseGeneratedScreen(tracked.text, codeRules);
     const version = await prisma.$transaction(async (tx) => {
       const latest = await tx.screenVersion.findFirst({
         where: { screenId },
@@ -293,15 +211,25 @@ export async function generateScreenWithAI(
           changeSummary: generated.changeSummary,
           newRulesJson: JSON.stringify(generated.newRules),
           layoutJson: JSON.stringify(generated.layoutJson),
-          htmlLayout,
-          flutterWidgetTree,
+          htmlLayout: generated.htmlLayout,
+          flutterWidgetTree: generated.flutterWidgetTree,
         },
         select: { id: true, versionNumber: true },
+      });
+      await tx.screenDesign.create({
+        data: {
+          projectId,
+          screenId,
+          screenVersionId: created.id,
+          modelJson: JSON.stringify(generated.internalDesignModel),
+          normalizedJson: JSON.stringify(generated.internalDesignModel),
+          validationJson: JSON.stringify(generated.idmValidation),
+        },
       });
       await saveDecisions(tx, { projectId, screenId, screenVersionId: created.id, decisions: generated.decisions });
       return created;
     });
-    await completeAiPromptLog(logId, { parsedResponse: { ...generated, aiRecovery: generated.aiRecovery, validation: generated.validation }, screenVersionId: version.id, error: null });
+    await completeAiPromptLog(logId, { parsedResponse: { ...generated, aiRecovery: generated.aiRecovery, validation: generated.validation, internalDesignModel: generated.internalDesignModel }, screenVersionId: version.id, error: null });
     await processGeneratedComponents(projectId, generated.componentSuggestions, screenId, version.id);
     const similarity = styleSimilarity({ designSpec: generated.designSpec, layoutJson: generated.layoutJson, tokenValues: project.designTokens.map((token) => token.value) });
     await prisma.styleSimilarityReport.create({ data: { projectId, screenVersionId: version.id, score: similarity.score, reasonsJson: JSON.stringify(similarity.reasons) } });
@@ -341,6 +269,16 @@ export async function generateScreenWithAI(
       };
     }
     if (error instanceof OpenRouterError) return { ok: false, error: error.message };
+    if (error instanceof DesignCompilerError) {
+      return {
+        ok: false,
+        error: "IDM не прошёл проверку Design Compiler.",
+        recoverable: true,
+        logId: logId ?? undefined,
+        parseError: error.message,
+        validation: buildValidationReport(null, error.validationErrors),
+      };
+    }
     if (error instanceof Error && error.message === "INVALID_AI_JSON") {
       return { ok: false, error: "Модель вернула JSON в неверном формате. Повторите генерацию." };
     }
@@ -503,51 +441,34 @@ function parseMessages(value: string): Array<{ role: "system" | "user" | "assist
   }
 }
 
-function parseGeneratedScreen(raw: string) {
+function parseGeneratedScreen(raw: string, projectRules: Array<{ category: string; name: string; value: string }>) {
   const recovery = recoverJson(raw);
   if (!recovery.ok) throwJsonRecoveryError(raw, recovery);
   const parsed = recovery.value;
-  const validation = buildValidationReport(parsed);
   if (!isRecord(parsed)) throwJsonRecoveryError(raw, recovery, ["Ответ должен быть JSON-объектом."]);
-
-  const designSpec = stringField(parsed.designSpec);
-  const imagePrompt = stringField(parsed.imagePrompt);
-  const layoutResult = validateLayoutJson(parsed.layoutJson);
-  const errors = [
-    ...(!designSpec ? ["Поле designSpec отсутствует или пустое."] : []),
-    ...(!imagePrompt ? ["Поле imagePrompt отсутствует или пустое."] : []),
-    ...(!layoutResult.valid || !layoutResult.layout ? layoutResult.errors.map((item) => `layoutJson: ${item}`) : []),
-  ];
-  if (errors.length) throwJsonRecoveryError(raw, recovery, errors);
-
-  const newRules = Array.isArray(parsed.newRules) ? parsed.newRules.flatMap((rule) => {
-    if (!isRecord(rule)) return [];
-    const name = stringField(rule.name);
-    const value = stringField(rule.value);
-    if (!name || !value) return [];
-    return {
-      category: stringField(rule.category) || "Общее",
-      name,
-      value,
-      source: stringField(rule.source) || "ai",
-    };
-  }) : [];
-  const decisions = parseDecisions(parsed.decisions);
-  const componentSuggestions = Array.isArray(parsed.componentSuggestions) ? parsed.componentSuggestions.flatMap((item) => {
-    if (!isRecord(item) || typeof item.name !== "string") return [];
-    const componentLayout = validateLayoutJson(item.layoutJson);
-    if (!componentLayout.valid || !componentLayout.layout) return [];
-    return [{ name: item.name, description: String(item.description ?? ""), category: String(item.category ?? "Misc"), designSpec: String(item.designSpec ?? ""), imagePrompt: String(item.imagePrompt ?? ""), layoutJson: componentLayout.layout, states: Array.isArray(item.states) ? item.states.map(String) : [], variants: Array.isArray(item.variants) ? item.variants.map(String) : [], usageGuidelines: String(item.usageGuidelines ?? ""), accessibilityNotes: String(item.accessibilityNotes ?? ""), reason: String(item.reason ?? "") }];
-  }) : [];
+  const compiled = compileDesignModel(parsed, projectRules);
   return {
-    designSpec,
-    imagePrompt,
-    layoutJson: layoutResult.layout!,
-    changeSummary: stringField(parsed.changeSummary) || "AI generation",
-    newRules,
-    decisions,
-    componentSuggestions,
-    validation,
+    designSpec: compiled.designSpec,
+    imagePrompt: compiled.imagePrompt,
+    layoutJson: compiled.layoutJson,
+    htmlLayout: compiled.htmlLayout,
+    flutterWidgetTree: compiled.flutterWidgetTree,
+    animationSpec: compiled.animationSpec,
+    exportJson: compiled.exportJson,
+    internalDesignModel: compiled.idm,
+    idmValidation: compiled.validation,
+    changeSummary: compiled.idm.exportMetadata.changeSummary || "IDM generation",
+    newRules: [] as GeneratedRule[],
+    decisions: [] as DecisionInput[],
+    componentSuggestions: compiled.componentSuggestions,
+    validation: {
+      layout: compiled.validation.errors.filter((item) => item.toLowerCase().includes("layout")),
+      components: [],
+      tokens: [],
+      prompt: compiled.imagePrompt ? [] : ["imagePrompt не был скомпилирован."],
+      constraints: compiled.validation.errors.filter((item) => item.toLowerCase().includes("constraint")),
+      memory: compiled.designSpec ? [] : ["designSpec не был скомпилирован."],
+    },
     aiRecovery: { stages: recovery.stages, warnings: recovery.warnings, repaired: recovery.repairedText !== recovery.jsonText },
   };
 }
@@ -562,13 +483,12 @@ function stringField(value: unknown) {
 
 function buildValidationReport(value: unknown, globalErrors: string[] = []): PipelineValidationReport {
   const record = isRecord(value) ? value : {};
-  const layout = validateLayoutJson(record.layoutJson);
   return {
-    layout: globalErrors.length ? globalErrors : layout.valid ? [] : layout.errors,
-    components: Array.isArray(record.componentSuggestions) ? [] : ["componentSuggestions отсутствует — будет использован пустой список."],
+    layout: globalErrors.length ? globalErrors : isRecord(record.hierarchy) ? [] : ["IDM hierarchy отсутствует."],
+    components: Array.isArray(record.componentSuggestions) ? [] : [],
     tokens: [],
-    prompt: typeof record.imagePrompt === "string" && record.imagePrompt.trim() ? [] : ["imagePrompt отсутствует или пустой."],
+    prompt: [],
     constraints: [],
-    memory: typeof record.designSpec === "string" && record.designSpec.trim() ? [] : ["designSpec отсутствует или пустой."],
+    memory: isRecord(record.metadata) ? [] : ["IDM metadata отсутствует."],
   };
 }

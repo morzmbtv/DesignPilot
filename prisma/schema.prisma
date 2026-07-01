@@ -97,6 +97,7 @@ model Project {
   designImports      DesignImport[]
   similarityReports  ComponentSimilarityReport[]
   styleReports       StyleSimilarityReport[]
+  screenDesigns      ScreenDesign[]
   user               User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -131,6 +132,7 @@ model Screen {
   designDecisions   DesignDecision[]
   summaries         ScreenSummary[]
   aiPromptLogs      AiPromptLog[]
+  screenDesigns     ScreenDesign[]
 
   @@index([projectId])
 }
@@ -155,8 +157,28 @@ model ScreenVersion {
   summaries       ScreenSummary[]
   aiPromptLogs    AiPromptLog[]
   styleSimilarityReport StyleSimilarityReport?
+  internalDesignModel ScreenDesign?
 
   @@unique([screenId, versionNumber])
+  @@index([screenId])
+}
+
+model ScreenDesign {
+  id              String   @id @default(cuid())
+  projectId       String
+  screenId        String
+  screenVersionId String   @unique
+  modelJson       String
+  normalizedJson  String?
+  validationJson  String?
+  compilerVersion String   @default("idm-v1")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  screen          Screen   @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  screenVersion   ScreenVersion @relation(fields: [screenVersionId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
   @@index([screenId])
 }
 
